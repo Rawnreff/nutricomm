@@ -1,8 +1,10 @@
 // import React, { createContext, useContext, useState, useEffect } from 'react';
-// import { User, DUMMY_USERS } from '../types/auth';
+// import { User, DUMMY_USERS, DUMMY_KEBUN } from '../types/auth';
+// import { router } from 'expo-router';
 
 // interface AuthContextType {
 //   user: User | null;
+//   kebun: any | null;
 //   login: (email: string, password: string) => Promise<boolean>;
 //   logout: () => void;
 //   isAuthenticated: boolean;
@@ -12,6 +14,12 @@
 
 // export function AuthProvider({ children }: { children: React.ReactNode }) {
 //   const [user, setUser] = useState<User | null>(null);
+//   const [kebun, setKebun] = useState<any | null>(null);
+
+//   useEffect(() => {
+//     // Load user data from storage jika ada
+//     // Untuk sekarang, kita skip karena ini demo
+//   }, []);
 
 //   const login = async (email: string, password: string): Promise<boolean> => {
 //     // Simulasi API call
@@ -23,6 +31,11 @@
     
 //     if (foundUser) {
 //       setUser(foundUser);
+      
+//       // Cari data kebun yang sesuai
+//       const userKebun = DUMMY_KEBUN.find(k => k.id_kebun === foundUser.id_kebun);
+//       setKebun(userKebun || null);
+      
 //       return true;
 //     }
 //     return false;
@@ -30,11 +43,14 @@
 
 //   const logout = () => {
 //     setUser(null);
+//     setKebun(null);
+//     router.replace('/login');
 //   };
 
 //   return (
 //     <AuthContext.Provider value={{
 //       user,
+//       kebun,
 //       login,
 //       logout,
 //       isAuthenticated: !!user,

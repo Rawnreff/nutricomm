@@ -76,14 +76,14 @@ export default function LoginScreen() {
 
         {/* Quick Login Section */}
         <View style={styles.quickLoginSection}>
-          <Text style={styles.quickLoginTitle}>Login Cepat (Demo)</Text>
+          <Text style={styles.quickLoginTitle}>Login Cepat</Text>
           <View style={styles.quickLoginButtons}>
             <TouchableOpacity 
               style={styles.quickLoginButton}
               onPress={() => quickLogin('budi@nutricomm.com', 'password123')}
             >
               <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>Keluarga Budi</Text>
+              <Text style={styles.quickLoginText}>1</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -91,7 +91,31 @@ export default function LoginScreen() {
               onPress={() => quickLogin('sari@nutricomm.com', 'password123')}
             >
               <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>Keluarga Sari</Text>
+              <Text style={styles.quickLoginText}>2</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.quickLoginButton}
+              onPress={() => quickLogin('ahmad@nutricomm.com', 'password123')}
+            >
+              <Ionicons name="person" size={16} color="#2E7D32" />
+              <Text style={styles.quickLoginText}>3</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.quickLoginButton}
+              onPress={() => quickLogin('maya@nutricomm.com', 'password123')}
+            >
+              <Ionicons name="person" size={16} color="#2E7D32" />
+              <Text style={styles.quickLoginText}>4</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.quickLoginButton}
+              onPress={() => quickLogin('rina@nutricomm.com', 'password123')}
+            >
+              <Ionicons name="person" size={16} color="#2E7D32" />
+              <Text style={styles.quickLoginText}>5</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -185,20 +209,6 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* Info Akun Dummy */}
-        <View style={styles.dummyAccountsInfo}>
-          <Text style={styles.dummyAccountsTitle}>Akun Demo Tersedia:</Text>
-          <View style={styles.accountList}>
-            <View style={styles.accountItem}>
-              <Text style={styles.accountEmail}>budi@nutricomm.com</Text>
-              <Text style={styles.accountPassword}>Password: password123</Text>
-            </View>
-            <View style={styles.accountItem}>
-              <Text style={styles.accountEmail}>sari@nutricomm.com</Text>
-              <Text style={styles.accountPassword}>Password: password123</Text>
-            </View>
-          </View>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -364,6 +374,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 20,
   },
   registerText: {
     color: '#666',
@@ -373,20 +384,6 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
     fontSize: 14,
     fontWeight: '600',
-  },
-  dummyAccountsInfo: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  dummyAccountsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
   },
   accountList: {
     gap: 8,
