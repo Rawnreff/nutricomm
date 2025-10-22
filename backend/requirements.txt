@@ -1,0 +1,11 @@
+flask
+flask-socketio
+flask-sock
+flask-cors
+flask-pymongo
+pymongo
+paho-mqtt
+python-dotenv
+eventLet
+python-engineio
+python-socketio
