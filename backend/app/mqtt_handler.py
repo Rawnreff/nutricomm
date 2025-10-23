@@ -118,6 +118,9 @@ import time
 import random
 import string
 
+# Import config
+from config import get_global_ip, get_mqtt_broker_url, get_mqtt_broker_port
+
 # Global variable to track MQTT status
 mqtt_connected = False
 mqtt_client = None
@@ -261,8 +264,9 @@ def init_mqtt(app, socketio, client_id=None):
             try:
                 print(f"\n🔄 MQTT Connection attempt {retry_count + 1}/{max_retries}")
                 
-                broker_ip = "10.218.22.169"
-                broker_port = 1883
+                # 🔥 GUNAKAN CONFIG DARI .env
+                broker_ip = get_global_ip()
+                broker_port = get_mqtt_broker_port()
                 
                 print(f"🔗 Connecting to {broker_ip}:{broker_port}...")
                 

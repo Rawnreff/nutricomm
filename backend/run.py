@@ -75,6 +75,9 @@ import signal
 import sys
 import json
 
+# Import config
+from config import get_global_ip, get_flask_host, get_flask_port, get_mqtt_broker_port
+
 # Generate unique client ID untuk hindari conflict
 def generate_client_id():
     return f"nutricomm-backend-{''.join(random.choices(string.ascii_uppercase + string.digits, k=8))}"
@@ -170,8 +173,10 @@ def test_mqtt_publish():
 
 @app.route('/')
 def index():
-    return """
+    global_ip = get_global_ip()
+    return f"""
     <h1>Nutricomm Server with MongoDB</h1>
+    <p><strong>Global IP:</strong> {global_ip}</p>
     <p>WebSocket endpoints:</p>
     <ul>
         <li><code>/socket.io/</code> - Socket.IO endpoint</li>
@@ -206,18 +211,24 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == '__main__':
+    # 🔥 GUNAKAN CONFIG DARI .env
+    global_ip = get_global_ip()
+    flask_host = get_flask_host()
+    flask_port = get_flask_port()
+    broker_port = get_mqtt_broker_port()
+    
     print("🚀 Starting Nutricomm Server - REAL DATA MODE")
     print("📊 ONLY real ESP32 data - No dummy data")
-    print("🔌 MQTT Broker: 10.218.22.169:1883")
+    print(f"🔌 MQTT Broker: {global_ip}:{broker_port}")
     print("📡 ESP32 Topic: nutricomm/sensor")
     print("🌐 WebSocket Server running on:")
-    print("   - http://localhost:5000")
-    print("   - http://10.218.22.169:5000")
+    print(f"   - http://localhost:{flask_port}")
+    print(f"   - http://{global_ip}:{flask_port}")
     print(f"🔑 MQTT Client ID: {client_id}")
     
     try:
-        # 🔥 GUNAKAN debug=False untuk production atau testing stability
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False)  # debug=False untuk hindari auto-restart
+        # 🔥 GUNAKAN CONFIG DARI .env
+        socketio.run(app, host=flask_host, port=flask_port, debug=False)
     except KeyboardInterrupt:
         print("\n🛑 Server stopped by user")
     except Exception as e:
