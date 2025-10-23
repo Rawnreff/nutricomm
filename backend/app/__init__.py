@@ -1,62 +1,5 @@
-# from flask import Flask
-# from flask_cors import CORS
-# from threading import Thread
-# import time
-# import random
-
-# # kita akan inisialisasi socketio di sini (disediakan oleh run.py)
-# socketio = None  # akan di-assign di run.py saat create_app dipanggil
-
-# def start_dummy_thread(app):
-#     def generate_data():
-#         with app.app_context():
-#             from app.routes.sensors import sensor_data
-#             while True:
-#                 # Update data sensor setiap 5 detik
-#                 sensor_data['suhu'] = round(random.uniform(25, 32), 1)
-#                 sensor_data['kelembapan_udara'] = round(random.uniform(50, 80), 1)
-#                 sensor_data['kelembapan_tanah'] = round(random.uniform(30, 70), 1)
-#                 sensor_data['cahaya'] = round(random.uniform(100, 900), 1)
-#                 sensor_data['co2'] = round(random.uniform(300, 800), 1)
-#                 sensor_data['timestamp'] = time.strftime("%Y-%m-%d %H:%M:%S")
-#                 # If socketio available, emit update as well
-#                 try:
-#                     if socketio:
-#                         socketio.emit("sensor_update", sensor_data, namespace="/")
-#                 except Exception as e:
-#                     print("Emit dummy error:", e)
-#                 time.sleep(5)
-
-#     thread = Thread(target=generate_data)
-#     thread.daemon = True
-#     thread.start()
-
-# # Factory function untuk membuat app Flask
-# def create_app():
-#     app = Flask(__name__)
-#     CORS(app)
-
-#     # Import dan register blueprint
-#     from app.routes.sensors import sensors_bp
-#     from app.routes.absensi import absensi_bp
-#     from app.routes.aktivitas import aktivitas_bp
-#     from app.routes.user import user_bp
-
-#     app.register_blueprint(sensors_bp, url_prefix="/api/sensors")
-#     app.register_blueprint(absensi_bp, url_prefix="/api/absensi")
-#     app.register_blueprint(aktivitas_bp, url_prefix="/api/aktivitas")
-#     app.register_blueprint(user_bp, url_prefix="/api/user")
-
-#     # Jalankan dummy thread setelah app dibuat
-#     start_dummy_thread(app)
-
-#     return app
-
 from flask import Flask
 from flask_cors import CORS
-from threading import Thread
-import time
-import random
 from pymongo import MongoClient
 from datetime import datetime
 from bson.objectid import ObjectId
@@ -68,29 +11,38 @@ socketio = None  # akan di-assign di run.py saat create_app dipanggil
 MONGO_URI = "mongodb://localhost:27017/"
 DB_NAME = "nutricomm"
 COLLECTION_NAME = "sensor_data"
+HISTORY_COLLECTION_NAME = "sensor_history"
 
 # Global MongoDB client
 mongo_client = None
 collection = None
+history_collection = None
+
+# Counter untuk history
+update_counter = 0
 
 def init_mongodb():
-    global mongo_client, collection
+    global mongo_client, collection, history_collection
     try:
         mongo_client = MongoClient(MONGO_URI)
         db = mongo_client[DB_NAME]
         collection = db[COLLECTION_NAME]
+        history_collection = db[HISTORY_COLLECTION_NAME]
         print("✅ Connected to MongoDB")
         
         # Create index untuk performa query
         collection.create_index([("id_kebun", 1), ("timestamp", -1)])
-        print("✅ MongoDB index created")
+        history_collection.create_index([("id_kebun", 1), ("timestamp", -1)])
+        print("✅ MongoDB indexes created")
         
     except Exception as e:
         print(f"❌ MongoDB connection error: {e}")
 
 def save_sensor_data(data):
-    """Save sensor data to MongoDB - INSERT jika belum ada, UPDATE jika sudah ada"""
-    if collection is None:
+    """Save sensor data to MongoDB - UPDATE data terakhir, dan simpan history setiap 2 menit"""
+    global update_counter
+    
+    if collection is None or history_collection is None:
         print("❌ MongoDB not initialized")
         return None
     
@@ -113,15 +65,50 @@ def save_sensor_data(data):
                 {'$set': data}
             )
             print(f"🔄 Data UPDATED in MongoDB. Matched: {result.matched_count}, Modified: {result.modified_count}")
+            
+            # 🔥 INCREMENT COUNTER dan CEK APAKAH SUDAH 120 UPDATE
+            update_counter += 1
+            print(f"📊 Update counter: {update_counter}/120")
+            
+            # Jika sudah 120 update (2 menit), simpan ke history
+            if update_counter >= 120:
+                save_to_history(data)
+                update_counter = 0  # Reset counter
+            
             return existing_doc['_id']
         else:
             # ✅ INSERT data baru jika belum ada
             result = collection.insert_one(data)
             print(f"💾 New data INSERTED to MongoDB with id: {result.inserted_id}")
+            
+            # Simpan juga ke history untuk data pertama
+            save_to_history(data)
+            update_counter = 0  # Reset counter
+            
             return result.inserted_id
             
     except Exception as e:
         print(f"❌ MongoDB save error: {e}")
+        return None
+
+def save_to_history(data):
+    """Save data to history collection (setiap 2 menit)"""
+    try:
+        # Buat copy data untuk history
+        history_data = data.copy()
+        
+        # Tambah field history_timestamp
+        history_data['history_timestamp'] = datetime.now().isoformat()
+        history_data['saved_as_history'] = True
+        
+        # Simpan ke history collection
+        result = history_collection.insert_one(history_data)
+        print(f"📚 Data saved to HISTORY collection (id: {result.inserted_id})")
+        print(f"⏰ History saved at: {history_data['history_timestamp']}")
+        
+        return result.inserted_id
+    except Exception as e:
+        print(f"❌ Error saving to history: {e}")
         return None
 
 def get_latest_sensor_data(kebun_id="KBG001"):
@@ -139,34 +126,32 @@ def get_latest_sensor_data(kebun_id="KBG001"):
         print(f"❌ MongoDB query error: {e}")
         return None
 
-def start_dummy_thread(app):
-    def generate_data():
-        with app.app_context():
-            from app.routes.sensors import sensor_data
-            while True:
-                # Update data sensor setiap 5 detik
-                sensor_data['suhu'] = round(random.uniform(25, 32), 1)
-                sensor_data['kelembapan_udara'] = round(random.uniform(50, 80), 1)
-                sensor_data['kelembapan_tanah'] = round(random.uniform(30, 70), 1)
-                sensor_data['cahaya'] = round(random.uniform(100, 900), 1)
-                sensor_data['co2'] = round(random.uniform(300, 800), 1)
-                sensor_data['timestamp'] = datetime.now().isoformat()  # ISO format
-                
-                # SIMPAN ke MongoDB (bisa insert atau update)
-                save_sensor_data(sensor_data.copy())
-                
-                # If socketio available, emit update as well
-                try:
-                    if socketio:
-                        socketio.emit("sensor_update", sensor_data)
-                        print("📢 Dummy data emitted via WebSocket")
-                except Exception as e:
-                    print("Emit dummy error:", e)
-                time.sleep(5)
+def get_sensor_history(kebun_id="KBG001", limit=100):
+    """Get sensor history data"""
+    if history_collection is None:
+        return []
+    
+    try:
+        history_data = list(history_collection.find(
+            {'id_kebun': kebun_id},
+            sort=[('timestamp', -1)]
+        ).limit(limit))
+        
+        return history_data
+    except Exception as e:
+        print(f"❌ MongoDB history query error: {e}")
+        return []
 
-    thread = Thread(target=generate_data)
-    thread.daemon = True
-    thread.start()
+def get_update_counter():
+    """Get current update counter value"""
+    global update_counter
+    return update_counter
+
+def reset_update_counter():
+    """Reset update counter (for testing)"""
+    global update_counter
+    update_counter = 0
+    print("🔄 Update counter reset to 0")
 
 # Factory function untuk membuat app Flask
 def create_app():
@@ -187,8 +172,8 @@ def create_app():
     app.register_blueprint(aktivitas_bp, url_prefix="/api/aktivitas")
     app.register_blueprint(user_bp, url_prefix="/api/user")
 
-    # Jalankan dummy thread setelah app dibuat
-    start_dummy_thread(app)
+    print("✅ Running in REAL DATA mode - No dummy data")
+    print("⏰ History saving: EVERY 2 MINUTES (120 updates)")
 
     return app
 
@@ -197,7 +182,12 @@ __all__ = [
     'socketio', 
     'mongo_client', 
     'collection', 
+    'history_collection',
     'init_mongodb', 
     'save_sensor_data', 
-    'get_latest_sensor_data'
+    'get_latest_sensor_data',
+    'get_sensor_history',
+    'get_update_counter',
+    'reset_update_counter',
+    'save_to_history'
 ]
