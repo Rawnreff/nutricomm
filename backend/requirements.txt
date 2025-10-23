@@ -9,3 +9,4 @@ python-dotenv
 eventLet
 python-engineio
 python-socketio
+bcrypt
