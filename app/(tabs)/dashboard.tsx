@@ -59,9 +59,9 @@ export default function Dashboard() {
       newNotifications.push('❄️ Suhu terlalu rendah untuk tanaman');
     }
     
-    if (data.cahaya < 200) {
+    if (data.cahaya < 1000) {
       newNotifications.push('💡 Cahaya kurang, pertimbangkan pencahayaan tambahan');
-    } else if (data.cahaya > 1000) {
+    } else if (data.cahaya > 12000) {
       newNotifications.push('☀️ Cahaya terlalu terang, mungkin perlu naungan');
     }
 
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#2E7D32',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 16,
   },
   headerTop: {
