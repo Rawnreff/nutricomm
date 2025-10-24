@@ -93,3 +93,92 @@ def get_user(user_id):
             
     except Exception as e:
         return jsonify({"error": f"Failed to get user: {str(e)}"}), 500
+
+@user_bp.route("/<user_id>/change-password", methods=["PUT"])
+def change_password(user_id):
+    """Change user password"""
+    try:
+        print(f"[Change Password] Request for user_id: {user_id}")
+        data = request.get_json()
+        print(f"[Change Password] Request data: {data}")
+        
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        
+        if not old_password or not new_password:
+            return jsonify({
+                "success": False,
+                "error": "Password lama dan password baru harus diisi"
+            }), 400
+        
+        if len(new_password) < 6:
+            return jsonify({
+                "success": False,
+                "error": "Password baru minimal 6 karakter"
+            }), 400
+        
+        user_model = get_user_model()
+        if not user_model:
+            return jsonify({
+                "success": False,
+                "error": "Database connection error"
+            }), 500
+        
+        # Verify old password - include password in response
+        print(f"[Change Password] Getting user data...")
+        user = user_model.get_user_by_id(user_id, include_password=True)
+        if not user:
+            print(f"[Change Password] User not found: {user_id}")
+            return jsonify({
+                "success": False,
+                "error": "User tidak ditemukan"
+            }), 404
+        
+        print(f"[Change Password] User found: {user.get('email')}")
+        
+        # Check old password
+        import bcrypt
+        if not user.get('password'):
+            print(f"[Change Password] Password field missing in user data")
+            return jsonify({
+                "success": False,
+                "error": "Password data tidak ditemukan"
+            }), 500
+        
+        print(f"[Change Password] Verifying old password...")
+        if not bcrypt.checkpw(old_password.encode('utf-8'), user['password'].encode('utf-8')):
+            print(f"[Change Password] Old password incorrect")
+            return jsonify({
+                "success": False,
+                "error": "Password lama tidak sesuai"
+            }), 401
+        
+        print(f"[Change Password] Old password verified, hashing new password...")
+        # Hash new password
+        hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+        
+        print(f"[Change Password] Updating password in database...")
+        # Update password in database
+        result = user_model.update_user_password(user_id, hashed_password.decode('utf-8'))
+        
+        if result:
+            print(f"[Change Password] Password updated successfully")
+            return jsonify({
+                "success": True,
+                "message": "Password berhasil diubah"
+            }), 200
+        else:
+            print(f"[Change Password] Failed to update password in database")
+            return jsonify({
+                "success": False,
+                "error": "Gagal mengubah password"
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        print(f"[Change Password] Error: {e}")
+        print(f"[Change Password] Traceback: {traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to change password: {str(e)}"
+        }), 500

@@ -80,13 +80,14 @@ class UserModel:
         except Exception as e:
             return {"error": f"Authentication failed: {str(e)}"}
     
-    def get_user_by_id(self, user_id):
+    def get_user_by_id(self, user_id, include_password=False):
         """Get user by ID"""
         try:
             user = self.users_collection.find_one({"_id": ObjectId(user_id)})
             if user:
                 user['_id'] = str(user['_id'])
-                user.pop('password', None)
+                if not include_password:
+                    user.pop('password', None)
                 return user
             return None
         except:
@@ -125,6 +126,23 @@ class UserModel:
                 
         except Exception as e:
             return {"error": f"Failed to update user: {str(e)}"}
+    
+    def update_user_password(self, user_id, new_hashed_password):
+        """Update user password"""
+        try:
+            result = self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": {
+                    "password": new_hashed_password,
+                    "updated_at": datetime.now().isoformat()
+                }}
+            )
+            
+            return result.modified_count > 0
+                
+        except Exception as e:
+            print(f"Error updating password: {e}")
+            return False
     
     def delete_user(self, user_id):
         """Soft delete user (set is_active to False)"""

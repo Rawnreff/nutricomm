@@ -55,3 +55,5 @@ class NotifikasiUpdate(BaseModel):
     is_read: Optional[bool] = None
     read_at: Optional[datetime] = None
 
+
+
