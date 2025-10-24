@@ -33,6 +33,21 @@ def init_mongodb():
         # Create index untuk performa query
         collection.create_index([("id_kebun", 1), ("timestamp", -1)])
         history_collection.create_index([("id_kebun", 1), ("timestamp", -1)])
+        
+        # Create indexes untuk notifikasi collection
+        notifikasi_collection = db['notifikasi']
+        notifikasi_collection.create_index([("user_id", 1), ("created_at", -1)])
+        notifikasi_collection.create_index([("kebun_id", 1), ("created_at", -1)])
+        notifikasi_collection.create_index([("user_id", 1), ("is_read", 1)])
+        # Index untuk duplikasi check (compound index)
+        notifikasi_collection.create_index([
+            ("user_id", 1), 
+            ("kebun_id", 1), 
+            ("kategori", 1), 
+            ("tingkat", 1),
+            ("created_at", -1)
+        ])
+        
         print("✅ MongoDB indexes created")
         
     except Exception as e:
@@ -166,11 +181,15 @@ def create_app():
     from app.routes.absensi import absensi_bp
     from app.routes.aktivitas import aktivitas_bp
     from app.routes.user import user_bp
+    from app.routes.kebun import kebun_bp
+    from app.routes.notifikasi import notifikasi_bp
 
     app.register_blueprint(sensors_bp, url_prefix="/api/sensors")
     app.register_blueprint(absensi_bp, url_prefix="/api/absensi")
     app.register_blueprint(aktivitas_bp, url_prefix="/api/aktivitas")
     app.register_blueprint(user_bp, url_prefix="/api/user")
+    app.register_blueprint(kebun_bp, url_prefix="/api/kebun")
+    app.register_blueprint(notifikasi_bp)
 
     print("✅ Running in REAL DATA mode - No dummy data")
     print("⏰ History saving: EVERY 2 MINUTES (120 updates)")
