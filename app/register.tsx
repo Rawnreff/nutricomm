@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,27 @@ import {
   Platform,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
-import { RegisterData, DUMMY_KEBUN } from './types/auth';
+import { RegisterData } from './types/auth';
+import { appConfig } from './services/config';
+
+interface Kebun {
+  _id?: string;
+  id_kebun: string;
+  nama_kebun: string;
+  lokasi: string;
+  luas?: string;
+  jenis_tanaman?: string[];
+  deskripsi?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  keluarga_terdaftar?: number;
+  kapasitas_kebun?: number;
+}
 
 export default function RegisterScreen() {
   const [formData, setFormData] = useState<RegisterData>({
@@ -25,10 +42,45 @@ export default function RegisterScreen() {
     id_kebun: '',
   });
   const [loading, setLoading] = useState(false);
+  const [loadingKebun, setLoadingKebun] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [kebunModalVisible, setKebunModalVisible] = useState(false);
-  const [selectedKebun, setSelectedKebun] = useState(DUMMY_KEBUN[0]); // Default pilih kebun pertama
+  const [kebunList, setKebunList] = useState<Kebun[]>([]);
+  const [selectedKebun, setSelectedKebun] = useState<Kebun | null>(null);
+
+  // Fetch kebun dari backend saat component mount
+  useEffect(() => {
+    fetchKebun();
+  }, []);
+
+  const fetchKebun = async () => {
+    try {
+      setLoadingKebun(true);
+      const backendUrl = appConfig.getBackendUrl();
+      console.log(`[Register] Fetching kebun from: ${backendUrl}/api/kebun`);
+      
+      const response = await fetch(`${backendUrl}/api/kebun`);
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.kebun) {
+        setKebunList(result.kebun);
+        if (result.kebun.length > 0) {
+          setSelectedKebun(result.kebun[0]);
+          setFormData(prev => ({ ...prev, id_kebun: result.kebun[0].id_kebun }));
+        }
+        console.log(`[Register] Loaded ${result.kebun.length} kebun`);
+      } else {
+        console.error('[Register] Failed to fetch kebun:', result);
+        Alert.alert('Error', 'Gagal memuat data kebun. Pastikan server backend sudah berjalan.');
+      }
+    } catch (error) {
+      console.error('[Register] Fetch kebun error:', error);
+      Alert.alert('Error', 'Gagal terhubung ke server. Pastikan server backend sudah berjalan.');
+    } finally {
+      setLoadingKebun(false);
+    }
+  };
 
   const handleRegister = async () => {
     // Validasi form
@@ -57,37 +109,63 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Cek kapasitas kebun
-    if (selectedKebun.keluarga_terdaftar >= selectedKebun.kapasitas_keluarga) {
-      Alert.alert('Error', 'Kebun yang dipilih sudah penuh. Silakan pilih kebun lain.');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Simulasi API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Call backend API untuk register
+      const backendUrl = appConfig.getBackendUrl();
+      console.log(`[Register] Registering user to: ${backendUrl}/api/user/register`);
       
-      // Untuk demo, kita batasi registrasi hanya untuk kebun yang ada
-      Alert.alert(
-        'Info Demo', 
-        'Fitur registrasi dinonaktifkan dalam mode demo. Gunakan akun demo yang tersedia:\n\nbudi@nutricomm.com / password123\nsari@nutricomm.com / password123'
-      );
+      // Generate username dari email
+      const username = formData.email.split('@')[0];
+      
+      const response = await fetch(`${backendUrl}/api/user/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nama: formData.nama,
+          email: formData.email,
+          username: username,
+          password: formData.password,
+          role: 'user',
+          kebun_id: formData.id_kebun,
+        }),
+      });
+
+      const result = await response.json();
+      console.log('[Register] Response:', result);
+
+      if (response.ok && result.success) {
+        Alert.alert(
+          'Sukses', 
+          'Registrasi berhasil! Silakan login dengan akun Anda.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/login')
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Registrasi gagal. Silakan coba lagi.');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Registrasi gagal. Silakan coba lagi.');
+      console.error('[Register] Error:', error);
+      Alert.alert('Error', 'Gagal terhubung ke server. Pastikan server backend sudah berjalan.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectKebun = (kebun: typeof DUMMY_KEBUN[0]) => {
+  const handleSelectKebun = (kebun: Kebun) => {
     setSelectedKebun(kebun);
     setFormData(prev => ({ ...prev, id_kebun: kebun.id_kebun }));
     setKebunModalVisible(false);
   };
 
-  const renderKebunItem = ({ item }: { item: typeof DUMMY_KEBUN[0] }) => (
+  const renderKebunItem = ({ item }: { item: Kebun }) => (
     <TouchableOpacity 
       style={[
         styles.kebunItem,
@@ -98,12 +176,33 @@ export default function RegisterScreen() {
       <View style={styles.kebunInfo}>
         <Text style={styles.kebunName}>{item.nama_kebun}</Text>
         <Text style={styles.kebunLocation}>{item.lokasi}</Text>
-        <Text style={styles.kebunDetails}>
-          Luas: {item.luas} • Kapasitas: {item.keluarga_terdaftar}/{item.kapasitas_keluarga} keluarga
-        </Text>
+        <View style={styles.capacityRow}>
+          <Text style={styles.kebunDetails}>
+            {item.luas ? `Luas: ${item.luas}` : ''}
+          </Text>
+          {item.kapasitas_kebun !== undefined && item.keluarga_terdaftar !== undefined && (
+            <View style={[
+              styles.capacityBadge,
+              item.keluarga_terdaftar >= item.kapasitas_kebun && styles.capacityBadgeFull
+            ]}>
+              <Text style={[
+                styles.capacityText,
+                item.keluarga_terdaftar >= item.kapasitas_kebun && styles.capacityTextFull
+              ]}>
+                {item.keluarga_terdaftar}/{item.kapasitas_kebun} keluarga
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
       {selectedKebun?.id_kebun === item.id_kebun && (
         <Ionicons name="checkmark-circle" size={24} color="#2E7D32" />
+      )}
+      {item.kapasitas_kebun !== undefined && item.keluarga_terdaftar !== undefined && 
+       item.keluarga_terdaftar >= item.kapasitas_kebun && (
+        <View style={styles.fullBadge}>
+          <Text style={styles.fullBadgeText}>PENUH</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -126,28 +225,19 @@ export default function RegisterScreen() {
           <Text style={styles.subtitle}>Bergabung dengan kebun gizi keluarga</Text>
         </View>
 
-        {/* Demo Notice */}
-        <View style={styles.demoNotice}>
-          <Ionicons name="information-circle" size={20} color="#E65100" />
-          <Text style={styles.demoNoticeText}>
-            Mode Demo: Registrasi dinonaktifkan. Gunakan akun demo yang tersedia.
-          </Text>
-        </View>
-
-        {/* Form Register (Disabled dalam demo) */}
+        {/* Form Register */}
         <View style={styles.formContainer}>
           {/* Nama Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nama Lengkap</Text>
-            <View style={[styles.inputContainer, styles.disabledInput]}>
-              <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
+            <Text style={styles.label}>Nama Lengkap Keluarga</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
-                style={[styles.textInput, styles.disabledText]}
-                placeholder="Fitur dinonaktifkan dalam demo"
+                style={styles.textInput}
+                placeholder="Contoh: Keluarga Budi Santoso"
                 value={formData.nama}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, nama: text }))}
                 autoCapitalize="words"
-                editable={false}
               />
             </View>
           </View>
@@ -155,17 +245,16 @@ export default function RegisterScreen() {
           {/* Email Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
-            <View style={[styles.inputContainer, styles.disabledInput]}>
-              <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
-                style={[styles.textInput, styles.disabledText]}
-                placeholder="Fitur dinonaktifkan dalam demo"
+                style={styles.textInput}
+                placeholder="Masukkan email"
                 value={formData.email}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
-                editable={false}
               />
             </View>
           </View>
@@ -173,23 +262,58 @@ export default function RegisterScreen() {
           {/* Password Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <View style={[styles.inputContainer, styles.disabledInput]}>
-              <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
               <TextInput
-                style={[styles.textInput, styles.disabledText]}
-                placeholder="Fitur dinonaktifkan dalam demo"
+                style={styles.textInput}
+                placeholder="Minimal 6 karakter"
                 value={formData.password}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
-                editable={false}
               />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons 
+                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Pilih Kebun (Masih aktif untuk demo pilihan kebun) */}
+          {/* Confirm Password Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Pilih Kebun (Demo)</Text>
+            <Text style={styles.label}>Konfirmasi Password</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Ulangi password"
+                value={formData.confirmPassword}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <Ionicons 
+                  name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Pilih Kebun */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Pilih Kebun</Text>
             <TouchableOpacity 
               style={styles.kebunSelector}
               onPress={() => setKebunModalVisible(true)}
@@ -206,38 +330,38 @@ export default function RegisterScreen() {
             {selectedKebun && (
               <View style={styles.selectedKebunInfo}>
                 <Text style={styles.selectedKebunText}>
-                  {selectedKebun.lokasi} • {selectedKebun.luas}
+                  {selectedKebun.lokasi} {selectedKebun.luas && `• ${selectedKebun.luas}`}
                 </Text>
-                <Text style={styles.selectedKebunCapacity}>
-                  Kapasitas: {selectedKebun.keluarga_terdaftar}/{selectedKebun.kapasitas_keluarga} keluarga
-                </Text>
+                {selectedKebun.kapasitas_kebun !== undefined && selectedKebun.keluarga_terdaftar !== undefined && (
+                  <Text style={[
+                    styles.selectedKebunCapacity,
+                    selectedKebun.keluarga_terdaftar >= selectedKebun.kapasitas_kebun && styles.selectedKebunCapacityFull
+                  ]}>
+                    Kapasitas: {selectedKebun.keluarga_terdaftar}/{selectedKebun.kapasitas_kebun} keluarga
+                    {selectedKebun.keluarga_terdaftar >= selectedKebun.kapasitas_kebun && ' (Penuh!)'}
+                  </Text>
+                )}
+                {selectedKebun.deskripsi && (
+                  <Text style={styles.selectedKebunDescription}>
+                    {selectedKebun.deskripsi}
+                  </Text>
+                )}
               </View>
             )}
           </View>
 
-          {/* Register Button (Disabled) */}
+          {/* Register Button */}
           <TouchableOpacity 
-            style={[styles.registerButton, styles.disabledButton]}
+            style={[styles.registerButton, (loading || loadingKebun || kebunList.length === 0) && styles.disabledButton]}
             onPress={handleRegister}
-            disabled={true}
+            disabled={loading || loadingKebun || kebunList.length === 0}
           >
-            <Text style={styles.registerButtonText}>Registrasi Dinonaktifkan (Demo)</Text>
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.registerButtonText}>Daftar Sekarang</Text>
+            )}
           </TouchableOpacity>
-
-          {/* Info Akun Demo */}
-          <View style={styles.demoAccounts}>
-            <Text style={styles.demoAccountsTitle}>Gunakan Akun Demo:</Text>
-            <View style={styles.accountList}>
-              <View style={styles.accountItem}>
-                <Text style={styles.accountEmail}>budi@nutricomm.com</Text>
-                <Text style={styles.accountPassword}>Password: password123</Text>
-              </View>
-              <View style={styles.accountItem}>
-                <Text style={styles.accountEmail}>sari@nutricomm.com</Text>
-                <Text style={styles.accountPassword}>Password: password123</Text>
-              </View>
-            </View>
-          </View>
 
           {/* Login Link */}
           <View style={styles.loginContainer}>
@@ -260,19 +384,32 @@ export default function RegisterScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Pilih Kebun Gizi (Demo)</Text>
+                <Text style={styles.modalTitle}>Pilih Kebun Gizi</Text>
                 <TouchableOpacity onPress={() => setKebunModalVisible(false)}>
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
               
-              <FlatList
-                data={DUMMY_KEBUN}
-                renderItem={renderKebunItem}
-                keyExtractor={(item) => item.id_kebun}
-                contentContainerStyle={styles.kebunList}
-                showsVerticalScrollIndicator={false}
-              />
+              {loadingKebun ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#2E7D32" />
+                  <Text style={styles.loadingText}>Memuat data kebun...</Text>
+                </View>
+              ) : kebunList.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="leaf-outline" size={48} color="#999" />
+                  <Text style={styles.emptyText}>Tidak ada kebun tersedia</Text>
+                  <Text style={styles.emptySubtext}>Hubungi admin untuk mendaftarkan kebun baru</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={kebunList}
+                  renderItem={renderKebunItem}
+                  keyExtractor={(item) => item.id_kebun}
+                  contentContainerStyle={styles.kebunList}
+                  showsVerticalScrollIndicator={false}
+                />
+              )}
             </View>
           </View>
         </Modal>
@@ -290,7 +427,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    paddingTop: 60,
+    paddingTop: 50,
     paddingBottom: 20,
     paddingHorizontal: 24,
     backgroundColor: '#F8F9FA',
@@ -527,5 +664,84 @@ const styles = StyleSheet.create({
   kebunDetails: {
     fontSize: 12,
     color: '#999',
+  },
+  capacityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  capacityBadge: {
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2E7D32',
+  },
+  capacityBadgeFull: {
+    backgroundColor: '#FFEBEE',
+    borderColor: '#E74C3C',
+  },
+  capacityText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2E7D32',
+  },
+  capacityTextFull: {
+    color: '#E74C3C',
+  },
+  fullBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  fullBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  selectedKebunCapacityFull: {
+    color: '#E74C3C',
+    fontWeight: '600',
+  },
+  selectedKebunDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  emptySubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  eyeIcon: {
+    padding: 12,
   },
 });

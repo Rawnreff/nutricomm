@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,35 @@ import {
   StyleSheet,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
+import { useAuth } from './contexts/AuthContext';
 
 export default function WelcomeScreen() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    // Wait for loading to finish before checking auth
+    if (!isLoading && isAuthenticated) {
+      // Jika sudah login, redirect ke dashboard
+      router.replace('/(tabs)/dashboard');
+    }
+  }, [isAuthenticated, isLoading]);
+
+  // Show loading screen while checking auth
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="leaf" size={80} color="#2E7D32" />
+        <Text style={styles.loadingTitle}>Nutricomm</Text>
+        <ActivityIndicator size="large" color="#2E7D32" style={styles.loader} />
+        <Text style={styles.loadingText}>Memuat data...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {/* Header */}
@@ -172,5 +196,25 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  loadingTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  loader: {
+    marginVertical: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
   },
 });

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
-import { LoginData, DUMMY_USERS } from './types/auth';
+import { LoginData } from './types/auth';
 import { useAuth } from './contexts/AuthContext';
 
 export default function LoginScreen() {
@@ -22,7 +22,7 @@ export default function LoginScreen() {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
 
   const handleLogin = async () => {
     if (!formData.email || !formData.password) {
@@ -41,23 +41,22 @@ export default function LoginScreen() {
       const success = await login(formData.email, formData.password);
       
       if (success) {
-        const user = DUMMY_USERS.find(u => u.email === formData.email);
-        Alert.alert('Sukses', `Login berhasil! Selamat datang ${user?.nama}`);
-        router.replace('/(tabs)/dashboard');
+        // Wait a bit for state to update
+        setTimeout(() => {
+          Alert.alert('Sukses', 'Login berhasil! Selamat datang');
+          router.replace('/(tabs)/dashboard');
+        }, 100);
       } else {
-        Alert.alert('Error', 'Email atau password salah');
+        Alert.alert('Error', 'Email atau password salah. Pastikan server backend sudah berjalan.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Terjadi kesalahan saat login');
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Terjadi kesalahan saat login. Pastikan server backend sudah berjalan di ' + require('./services/config').appConfig.getBackendUrl());
     } finally {
       setLoading(false);
     }
   };
 
-  // Fungsi untuk login cepat dengan akun dummy
-  const quickLogin = (email: string, password: string) => {
-    setFormData({ email, password });
-  };
 
   return (
     <KeyboardAvoidingView 
@@ -74,62 +73,9 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Kebun Gizi Keluarga</Text>
         </View>
 
-        {/* Quick Login Section */}
-        <View style={styles.quickLoginSection}>
-          <Text style={styles.quickLoginTitle}>Login Cepat</Text>
-          <View style={styles.quickLoginButtons}>
-            <TouchableOpacity 
-              style={styles.quickLoginButton}
-              onPress={() => quickLogin('budi@nutricomm.com', 'password123')}
-            >
-              <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>1</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.quickLoginButton}
-              onPress={() => quickLogin('sari@nutricomm.com', 'password123')}
-            >
-              <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>2</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.quickLoginButton}
-              onPress={() => quickLogin('ahmad@nutricomm.com', 'password123')}
-            >
-              <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>3</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.quickLoginButton}
-              onPress={() => quickLogin('maya@nutricomm.com', 'password123')}
-            >
-              <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>4</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.quickLoginButton}
-              onPress={() => quickLogin('rina@nutricomm.com', 'password123')}
-            >
-              <Ionicons name="person" size={16} color="#2E7D32" />
-              <Text style={styles.quickLoginText}>5</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>ATAU</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
         {/* Form Login */}
         <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Masuk Manual</Text>
+          <Text style={styles.formTitle}>Masuk ke Akun Anda</Text>
 
           {/* Email Input */}
           <View style={styles.inputGroup}>
@@ -174,13 +120,6 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Info Akun Demo */}
-          <View style={styles.demoInfo}>
-            <Ionicons name="information-circle" size={16} color="#666" />
-            <Text style={styles.demoInfoText}>
-              Gunakan salah satu akun demo di atas atau isi form manual
-            </Text>
-          </View>
 
           {/* Login Button */}
           <TouchableOpacity 
@@ -248,64 +187,15 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  quickLoginSection: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  quickLoginTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  quickLoginButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickLoginButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F8E9',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-    gap: 6,
-  },
-  quickLoginText: {
-    color: '#2E7D32',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E0E0E0',
-  },
-  dividerText: {
-    paddingHorizontal: 12,
-    color: '#999',
-    fontSize: 12,
-    fontWeight: '500',
-  },
   formContainer: {
     paddingHorizontal: 24,
     paddingBottom: 20,
   },
   formTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: 'center',
   },
   inputGroup: {
@@ -336,20 +226,6 @@ const styles = StyleSheet.create({
   },
   eyeIcon: {
     padding: 12,
-  },
-  demoInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 8,
-  },
-  demoInfoText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#E65100',
   },
   loginButton: {
     flexDirection: 'row',

@@ -99,7 +99,7 @@ export default function TabLayout() {
             backgroundColor: '#ffffff',
             borderTopColor: '#E0E0E0',
           },
-          headerShown: true,
+          headerShown: false,
           headerRight: () => (
             <TouchableOpacity 
               onPress={() => setShowIPConfig(true)}

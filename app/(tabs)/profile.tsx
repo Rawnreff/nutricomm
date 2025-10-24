@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,56 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { appConfig } from '../services/config';
+
+interface KebunData {
+  _id?: string;
+  id_kebun: string;
+  nama_kebun: string;
+  lokasi: string;
+  luas?: string;
+  jenis_tanaman?: string[];
+  deskripsi?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export default function ProfileScreen() {
-  const { user, kebun, logout } = useAuth();
+  const { user, logout } = useAuth();
+  const [kebunData, setKebunData] = useState<KebunData | null>(null);
+  const [loadingKebun, setLoadingKebun] = useState(false);
+
+  // Fetch kebun data from backend
+  useEffect(() => {
+    if (user?.id_kebun) {
+      fetchKebunData(user.id_kebun);
+    }
+  }, [user]);
+
+  const fetchKebunData = async (kebunId: string) => {
+    try {
+      setLoadingKebun(true);
+      const backendUrl = appConfig.getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/kebun/by-id/${kebunId}`);
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.kebun) {
+        setKebunData(result.kebun);
+        console.log('[Profile] Kebun data loaded:', result.kebun);
+      } else {
+        console.error('[Profile] Failed to load kebun:', result);
+      }
+    } catch (error) {
+      console.error('[Profile] Error loading kebun:', error);
+    } finally {
+      setLoadingKebun(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -26,7 +70,13 @@ export default function ProfileScreen() {
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: () => logout()
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (error) {
+              console.error('[Profile] Logout error:', error);
+            }
+          }
         },
       ]
     );
@@ -76,70 +126,59 @@ export default function ProfileScreen() {
         {/* Info Kebun */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informasi Kebun</Text>
-          <View style={styles.sectionContent}>
-            <ProfileItem 
-              icon="business" 
-              label="Nama Kebun" 
-              value={kebun?.nama_kebun || 'Tidak tersedia'} 
-            />
-            <ProfileItem 
-              icon="location" 
-              label="Lokasi" 
-              value={kebun?.lokasi || 'Tidak tersedia'} 
-            />
-            <ProfileItem 
-              icon="resize" 
-              label="Luas" 
-              value={kebun?.luas || 'Tidak tersedia'} 
-            />
-            <ProfileItem 
-              icon="calendar" 
-              label="Tanggal Mulai" 
-              value={kebun?.tanggal_mulai 
-                ? new Date(kebun.tanggal_mulai).toLocaleDateString('id-ID') 
-                : 'Tidak tersedia'
-              } 
-            />
-            <ProfileItem 
-              icon="key" 
-              label="ID Kebun" 
-              value={user.id_kebun} 
-            />
-            <ProfileItem 
-              icon="people" 
-              label="Keluarga Terdaftar" 
-              value={kebun 
-                ? `${kebun.keluarga_terdaftar}/${kebun.kapasitas_keluarga} keluarga`
-                : 'Tidak tersedia'
-              } 
-            />
-          </View>
+          {loadingKebun ? (
+            <View style={styles.loadingSection}>
+              <ActivityIndicator size="small" color="#2E7D32" />
+              <Text style={styles.loadingText}>Memuat data kebun...</Text>
+            </View>
+          ) : (
+            <View style={styles.sectionContent}>
+              <ProfileItem 
+                icon="business" 
+                label="Nama Kebun" 
+                value={kebunData?.nama_kebun || 'Tidak tersedia'} 
+              />
+              <ProfileItem 
+                icon="location" 
+                label="Lokasi" 
+                value={kebunData?.lokasi || 'Tidak tersedia'} 
+              />
+              <ProfileItem 
+                icon="resize" 
+                label="Luas" 
+                value={kebunData?.luas || 'Tidak tersedia'} 
+              />
+              <ProfileItem 
+                icon="key" 
+                label="ID Kebun" 
+                value={user.id_kebun} 
+              />
+              {kebunData?.jenis_tanaman && kebunData.jenis_tanaman.length > 0 && (
+                <ProfileItem 
+                  icon="leaf" 
+                  label="Jenis Tanaman" 
+                  value={`${kebunData.jenis_tanaman.length} jenis`} 
+                />
+              )}
+              {kebunData?.deskripsi && (
+                <View style={styles.descriptionContainer}>
+                  <Text style={styles.descriptionLabel}>Deskripsi:</Text>
+                  <Text style={styles.descriptionText}>{kebunData.deskripsi}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* Statistik User */}
+        {/* Info User */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Statistik Saya</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Ionicons name="water" size={24} color="#2E7D32" />
-              <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Menyiram</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="nutrition" size={24} color="#2E7D32" />
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Pupuk</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="leaf" size={24} color="#2E7D32" />
-              <Text style={styles.statNumber}>8</Text>
-              <Text style={styles.statLabel}>Panen</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="calendar" size={24} color="#2E7D32" />
-              <Text style={styles.statNumber}>85%</Text>
-              <Text style={styles.statLabel}>Kehadiran</Text>
-            </View>
+          <Text style={styles.sectionTitle}>Informasi Akun</Text>
+          <View style={styles.sectionContent}>
+            <ProfileItem 
+              icon="person" 
+              label="Nama Keluarga" 
+              value={user.nama} 
+            />
           </View>
         </View>
 
@@ -214,7 +253,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#2E7D32',
     padding: 20,
-    paddingTop: 20,
+    paddingTop: 70,
     paddingBottom: 24,
     alignItems: 'center',
   },
@@ -276,36 +315,30 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '500',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  statItem: {
-    flex: 1,
-    minWidth: '45%',
+  loadingSection: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#2E7D32',
+  loadingText: {
     marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
+  },
+  descriptionContainer: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  descriptionLabel: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
   },
   menuItem: {
     flexDirection: 'row',

@@ -9,130 +9,280 @@ import {
   TextInput,
   Alert,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Aktivitas } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { appConfig } from '../services/config';
+
+interface AktivitasData {
+  _id?: string;
+  user_id: string;
+  kebun_id: string;
+  nama_user: string;
+  jenis_aktivitas: string;
+  deskripsi: string;
+  tanggal: string;
+  waktu: string;
+  foto?: string[];
+}
+
+const JENIS_AKTIVITAS_OPTIONS = [
+  { value: 'Menyiram tanaman', icon: 'water' },
+  { value: 'Memberi pupuk', icon: 'nutrition' },
+  { value: 'Membersihkan gulma', icon: 'cut' },
+  { value: 'Memanen', icon: 'leaf' },
+  { value: 'Menanam', icon: 'flower' },
+  { value: 'Menyiangi', icon: 'hand-left' },
+  { value: 'Menggemburkan tanah', icon: 'egg' },
+];
 
 export default function AktivitasScreen() {
-  const [aktivitasList, setAktivitasList] = useState<Aktivitas[]>([]);
+  const { user, kebun } = useAuth();
+  const [aktivitasList, setAktivitasList] = useState<AktivitasData[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [canAddAktivitas, setCanAddAktivitas] = useState(false);
   const [formData, setFormData] = useState({
-    kegiatan: '',
-    keterangan: '',
+    jenis_aktivitas: [] as string[],
+    aktivitas_lainnya: '',
+    deskripsi: '',
   });
 
   useEffect(() => {
-    loadAktivitas();
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    setLoading(true);
+    await Promise.all([
+      checkAbsensiStatus(),
+      loadAktivitas()
+    ]);
+    setLoading(false);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const checkAbsensiStatus = async () => {
+    try {
+      const backendUrl = appConfig.getBackendUrl();
+      const response = await fetch(
+        `${backendUrl}/api/absensi/status?user_id=${user?.id_user}&kebun_id=${user?.id_kebun}`
+      );
+      const data = await response.json();
+      
+      // Hanya yang check-in hari ini yang bisa tambah aktivitas
+      if (data.success && data.has_checked_in && data.is_my_absensi) {
+        setCanAddAktivitas(true);
+      } else {
+        setCanAddAktivitas(false);
+      }
+    } catch (error) {
+      console.error('[Aktivitas] Error checking absensi:', error);
+      setCanAddAktivitas(false);
+    }
+  };
 
   const loadAktivitas = async () => {
-    // Simulasi data
-    const mockAktivitas: Aktivitas[] = [
-      {
-        id_user: 'user1',
-        id_kebun: 'KBG001',
-        kegiatan: 'Menyiram tanaman',
-        tanggal: '2025-10-20T08:30:00Z',
-        keterangan: 'Menyiram semua tanaman pagi hari'
-      },
-      {
-        id_user: 'user2',
-        id_kebun: 'KBG001',
-        kegiatan: 'Memberi pupuk organik',
-        tanggal: '2025-10-19T15:20:00Z',
-        keterangan: 'Pupuk kompos untuk tanaman sayuran'
-      },
-      {
-        id_user: 'user1',
-        id_kebun: 'KBG001',
-        kegiatan: 'Membersihkan gulma',
-        tanggal: '2025-10-18T10:15:00Z',
-      },
-    ];
-    setAktivitasList(mockAktivitas);
+    try {
+      const backendUrl = appConfig.getBackendUrl();
+      const response = await fetch(
+        `${backendUrl}/api/aktivitas/kebun/${user?.id_kebun}/today`
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        setAktivitasList(data.aktivitas);
+      }
+    } catch (error) {
+      console.error('[Aktivitas] Error loading aktivitas:', error);
+    }
   };
 
   const handleTambahAktivitas = async () => {
-    if (!formData.kegiatan.trim()) {
-      Alert.alert('Error', 'Harap isi jenis kegiatan');
+    if (formData.jenis_aktivitas.length === 0 && !formData.aktivitas_lainnya.trim()) {
+      Alert.alert('Error', 'Harap pilih atau isi minimal satu jenis aktivitas');
       return;
     }
 
     try {
-      const newAktivitas: Aktivitas = {
-        id_user: 'user1',
-        id_kebun: 'KBG001',
-        kegiatan: formData.kegiatan,
-        tanggal: new Date().toISOString(),
-        keterangan: formData.keterangan,
-      };
-
-      setAktivitasList(prev => [newAktivitas, ...prev]);
-      setFormData({ kegiatan: '', keterangan: '' });
-      setModalVisible(false);
+      setLoading(true);
+      const backendUrl = appConfig.getBackendUrl();
       
-      Alert.alert('Sukses', 'Aktivitas berhasil ditambahkan!');
+      // Gabungkan aktivitas yang dipilih dengan "Lainnya"
+      let allAktivitas = [...formData.jenis_aktivitas];
+      if (formData.aktivitas_lainnya.trim()) {
+        allAktivitas.push(formData.aktivitas_lainnya.trim());
+      }
+      
+      const jenisAktivitasString = allAktivitas.join(', ');
+      
+      const response = await fetch(`${backendUrl}/api/aktivitas/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: user?.id_user,
+          kebun_id: user?.id_kebun,
+          nama_user: user?.nama,
+          jenis_aktivitas: jenisAktivitasString,
+          deskripsi: formData.deskripsi
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Reset form dan tutup modal terlebih dahulu
+        setFormData({ jenis_aktivitas: [], aktivitas_lainnya: '', deskripsi: '' });
+        setModalVisible(false);
+        
+        // Reload data
+        await loadAktivitas();
+        
+        // Show success message
+        Alert.alert(
+          'Sukses! ✅',
+          'Aktivitas berhasil ditambahkan!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', data.error || 'Gagal menambahkan aktivitas');
+      }
     } catch (error) {
+      console.error('[Aktivitas] Error adding aktivitas:', error);
       Alert.alert('Error', 'Gagal menambahkan aktivitas');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const toggleAktivitas = (value: string) => {
+    setFormData(prev => {
+      const currentAktivitas = [...prev.jenis_aktivitas];
+      const index = currentAktivitas.indexOf(value);
+      
+      if (index > -1) {
+        // Remove if already selected
+        currentAktivitas.splice(index, 1);
+      } else {
+        // Add if not selected
+        currentAktivitas.push(value);
+      }
+      
+      return { ...prev, jenis_aktivitas: currentAktivitas };
+    });
+  };
+
+  const handleOpenModal = () => {
+    if (!canAddAktivitas) {
+      Alert.alert(
+        'Tidak Bisa Menambah Aktivitas',
+        'Hanya petugas yang check-in hari ini yang bisa menambahkan aktivitas. Silakan check-in terlebih dahulu di halaman Absensi.',
+        [{ text: 'Mengerti' }]
+      );
+      return;
+    }
+    
+    // Reset form sebelum buka modal
+    setFormData({ jenis_aktivitas: [], aktivitas_lainnya: '', deskripsi: '' });
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    // Reset form saat tutup modal
+    setFormData({ jenis_aktivitas: [], aktivitas_lainnya: '', deskripsi: '' });
+    setModalVisible(false);
   };
 
   const formatWaktu = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
+    return date.toLocaleTimeString('id-ID', {
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  const getIconForKegiatan = (kegiatan: string) => {
-    const lowerKegiatan = kegiatan.toLowerCase();
-    if (lowerKegiatan.includes('siram')) return 'water';
-    if (lowerKegiatan.includes('pupuk')) return 'nutrition';
-    if (lowerKegiatan.includes('gulma') || lowerKegiatan.includes('bersih')) return 'cut';
-    if (lowerKegiatan.includes('panen')) return 'leaf';
-    return 'leaf';
+  const formatTanggal = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
   };
 
-  const renderAktivitasItem = ({ item }: { item: Aktivitas }) => (
+  const getIconForKegiatan = (jenis: string) => {
+    // Jika multiple aktivitas, ambil yang pertama
+    const firstActivity = jenis.split(',')[0].trim();
+    const option = JENIS_AKTIVITAS_OPTIONS.find(opt => opt.value === firstActivity);
+    return option ? option.icon as any : 'leaf';
+  };
+
+  const renderAktivitasItem = ({ item }: { item: AktivitasData }) => (
     <View style={styles.aktivitasItem}>
       <View style={styles.aktivitasIcon}>
         <Ionicons 
-          name={getIconForKegiatan(item.kegiatan) as any} 
+          name={getIconForKegiatan(item.jenis_aktivitas)} 
           size={24} 
           color="#2E7D32" 
         />
       </View>
       <View style={styles.aktivitasContent}>
-        <Text style={styles.aktivitasKegiatan}>{item.kegiatan}</Text>
-        {item.keterangan && (
-          <Text style={styles.aktivitasKeterangan}>{item.keterangan}</Text>
+        <Text style={styles.aktivitasKegiatan}>{item.jenis_aktivitas}</Text>
+        <View style={styles.aktivitasMetaRow}>
+          <Ionicons name="person-outline" size={14} color="#666" />
+          <Text style={styles.aktivitasUser}>{item.nama_user}</Text>
+          <Ionicons name="time-outline" size={14} color="#666" style={{ marginLeft: 12 }} />
+          <Text style={styles.aktivitasWaktu}>{formatWaktu(item.waktu)}</Text>
+        </View>
+        {item.deskripsi && (
+          <Text style={styles.aktivitasKeterangan}>{item.deskripsi}</Text>
         )}
-        <Text style={styles.aktivitasTanggal}>
-          {formatWaktu(item.tanggal)}
-        </Text>
-      </View>
-      <View style={styles.aktivitasUser}>
-        <Ionicons name="person" size={16} color="#757575" />
       </View>
     </View>
   );
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Aktivitas Kebun</Text>
+          <Text style={styles.headerSubtitle}>{kebun?.nama_kebun || 'Kebun Gizi'}</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+          <Text style={styles.loadingText}>Memuat data...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Aktivitas Kebun</Text>
-        <Text style={styles.headerSubtitle}>Catatan kegiatan keluarga</Text>
+        <Text style={styles.headerTitle}>Aktivitas Hari Ini</Text>
+        <Text style={styles.headerSubtitle}>{kebun?.nama_kebun || 'Kebun Gizi'}</Text>
       </View>
 
       {/* Floating Action Button */}
       <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => setModalVisible(true)}
+        style={[
+          styles.fab,
+          !canAddAktivitas && styles.fabDisabled
+        ]}
+        onPress={handleOpenModal}
       >
         <Ionicons name="add" size={24} color="#FFFFFF" />
       </TouchableOpacity>
@@ -141,14 +291,19 @@ export default function AktivitasScreen() {
       <FlatList
         data={aktivitasList}
         renderItem={renderAktivitasItem}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item, index) => item._id || index.toString()}
         contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2E7D32']} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="leaf" size={64} color="#BDBDBD" />
-            <Text style={styles.emptyStateTitle}>Belum ada aktivitas</Text>
+            <Ionicons name="leaf-outline" size={64} color="#BDBDBD" />
+            <Text style={styles.emptyStateTitle}>Belum ada aktivitas hari ini</Text>
             <Text style={styles.emptyStateText}>
-              Mulai catat kegiatan kebun keluarga Anda
+              {canAddAktivitas 
+                ? 'Tekan tombol + untuk menambah aktivitas'
+                : 'Check-in terlebih dahulu untuk menambah aktivitas'}
             </Text>
           </View>
         }
@@ -159,44 +314,99 @@ export default function AktivitasScreen() {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Tambah Aktivitas</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity onPress={handleCloseModal}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Jenis Kegiatan</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Contoh: Menyiram, Memberi pupuk, Membersihkan gulma"
-                value={formData.kegiatan}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, kegiatan: text }))}
-              />
+              <Text style={styles.formLabel}>Jenis Aktivitas * (Pilih satu atau lebih)</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.jenisAktivitasScroll}
+              >
+                {JENIS_AKTIVITAS_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.jenisAktivitasOption,
+                      formData.jenis_aktivitas.includes(option.value) && styles.jenisAktivitasOptionActive
+                    ]}
+                    onPress={() => toggleAktivitas(option.value)}
+                  >
+                    <Ionicons 
+                      name={option.icon as any} 
+                      size={20} 
+                      color={formData.jenis_aktivitas.includes(option.value) ? '#FFFFFF' : '#2E7D32'} 
+                    />
+                    <Text style={[
+                      styles.jenisAktivitasText,
+                      formData.jenis_aktivitas.includes(option.value) && styles.jenisAktivitasTextActive
+                    ]}>
+                      {option.value}
+                    </Text>
+                    {formData.jenis_aktivitas.includes(option.value) && (
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={16} 
+                        color="#FFFFFF" 
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              {/* Show selected count */}
+              {formData.jenis_aktivitas.length > 0 && (
+                <Text style={styles.selectedCount}>
+                  {formData.jenis_aktivitas.length} aktivitas dipilih
+                </Text>
+              )}
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Keterangan (Opsional)</Text>
+              <Text style={styles.formLabel}>Aktivitas Lainnya (Opsional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Contoh: Memangkas tanaman, Membuat kompos..."
+                value={formData.aktivitas_lainnya}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, aktivitas_lainnya: text }))}
+              />
+              <Text style={styles.helperText}>
+                Isi jika ada aktivitas lain yang tidak ada di pilihan
+              </Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Deskripsi Detail (Opsional)</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                placeholder="Tambahkan catatan detail kegiatan..."
-                value={formData.keterangan}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, keterangan: text }))}
+                placeholder="Tambahkan detail aktivitas yang dilakukan..."
+                value={formData.deskripsi}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, deskripsi: text }))}
                 multiline
-                numberOfLines={3}
+                numberOfLines={4}
               />
             </View>
 
             <TouchableOpacity 
-              style={styles.submitButton}
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
               onPress={handleTambahAktivitas}
+              disabled={loading}
             >
-              <Text style={styles.submitButtonText}>Simpan Aktivitas</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Simpan Aktivitas</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -213,7 +423,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#2E7D32',
     padding: 20,
-    paddingTop: 20,
+    paddingTop: 60,
   },
   headerTitle: {
     fontSize: 24,
@@ -224,6 +434,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#E8F5E8',
     marginTop: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   listContainer: {
     padding: 16,
@@ -257,21 +478,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  aktivitasMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 4,
+  },
+  aktivitasUser: {
+    fontSize: 12,
+    color: '#666',
+  },
+  aktivitasWaktu: {
+    fontSize: 12,
+    color: '#666',
   },
   aktivitasKeterangan: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
-    width: 220,
+    marginTop: 4,
   },
   aktivitasTanggal: {
     fontSize: 12,
     color: '#999',
-  },
-  aktivitasUser: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   fab: {
     position: 'absolute',
@@ -289,6 +519,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 8,
     zIndex: 1000,
+  },
+  fabDisabled: {
+    backgroundColor: '#B0B0B0',
   },
   emptyState: {
     alignItems: 'center',
@@ -348,8 +581,46 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   textArea: {
-    height: 80,
+    height: 100,
     textAlignVertical: 'top',
+  },
+  jenisAktivitasScroll: {
+    marginVertical: 8,
+  },
+  jenisAktivitasOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#2E7D32',
+  },
+  jenisAktivitasOptionActive: {
+    backgroundColor: '#2E7D32',
+  },
+  jenisAktivitasText: {
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '500',
+  },
+  jenisAktivitasTextActive: {
+    color: '#FFFFFF',
+  },
+  selectedCount: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   submitButton: {
     backgroundColor: '#2E7D32',
@@ -357,6 +628,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#B0B0B0',
   },
   submitButtonText: {
     color: '#FFFFFF',
