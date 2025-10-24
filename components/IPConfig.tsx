@@ -34,12 +34,8 @@ export const IPConfig: React.FC<IPConfigProps> = ({ isVisible, onClose, onIPChan
   }, [isVisible]);
 
   const loadSavedIPs = () => {
-    // Untuk sekarang kita simpan di state, bisa extend ke AsyncStorage nanti
-    const commonIPs = [
-      '10.218.18.170',
-      '192.168.137.1',
-      'localhost'
-    ];
+    // Ambil daftar IP dari config terpusat
+    const commonIPs = appConfig.getCommonIPs();
     setSavedIPs(commonIPs);
   };
 

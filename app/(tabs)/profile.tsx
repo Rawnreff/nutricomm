@@ -338,7 +338,7 @@ Mohon bantuannya: <<pesan saya>>`;
               onPress={handleHubungiTim}
             >
               <View style={styles.menuItemLeft}>
-                <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+                <Ionicons name="logo-whatsapp" size={20} color="#666" />
                 <Text style={styles.menuText}>Bantuan & Panduan</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
