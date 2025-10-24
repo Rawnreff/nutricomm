@@ -7,8 +7,8 @@ class KebunModel:
         self.db = database
         self.kebun_collection = self.db.get_collection('kebun')
     
-    def create_kebun(self, kebun_data, created_by):
-        """Create new kebun (only admin can do this)"""
+    def create_kebun(self, kebun_data):
+        """Create new kebun"""
         try:
             # Check if kebun ID already exists
             if self.kebun_collection.find_one({"id_kebun": kebun_data['id_kebun']}):
@@ -25,7 +25,8 @@ class KebunModel:
                 "luas": kebun_data.get('luas'),
                 "jenis_tanaman": kebun_data.get('jenis_tanaman', []),
                 "deskripsi": kebun_data.get('deskripsi', ''),
-                "created_by": created_by,  # User ID who created this kebun
+                "kapasitas_kebun": kebun_data.get('kapasitas_kebun', 4),  # Default 4 keluarga
+                "keluarga_terdaftar": 0,  # Awalnya 0
                 "is_active": True,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
@@ -108,3 +109,54 @@ class KebunModel:
                 
         except Exception as e:
             return {"error": f"Failed to delete kebun: {str(e)}"}
+    
+    def increment_keluarga(self, kebun_id):
+        """Increment jumlah keluarga terdaftar di kebun"""
+        try:
+            result = self.kebun_collection.update_one(
+                {"id_kebun": kebun_id},
+                {"$inc": {"keluarga_terdaftar": 1}, "$set": {"updated_at": datetime.now().isoformat()}}
+            )
+            
+            if result.modified_count > 0:
+                return {"success": True}
+            else:
+                return {"error": "Kebun not found"}
+                
+        except Exception as e:
+            return {"error": f"Failed to increment keluarga: {str(e)}"}
+    
+    def decrement_keluarga(self, kebun_id):
+        """Decrement jumlah keluarga terdaftar di kebun"""
+        try:
+            result = self.kebun_collection.update_one(
+                {"id_kebun": kebun_id},
+                {"$inc": {"keluarga_terdaftar": -1}, "$set": {"updated_at": datetime.now().isoformat()}}
+            )
+            
+            if result.modified_count > 0:
+                return {"success": True}
+            else:
+                return {"error": "Kebun not found"}
+                
+        except Exception as e:
+            return {"error": f"Failed to decrement keluarga: {str(e)}"}
+    
+    def check_capacity(self, kebun_id):
+        """Check if kebun still has capacity"""
+        try:
+            kebun = self.kebun_collection.find_one({"id_kebun": kebun_id, "is_active": True})
+            if kebun:
+                keluarga_terdaftar = kebun.get('keluarga_terdaftar', 0)
+                kapasitas_kebun = kebun.get('kapasitas_kebun', 4)
+                
+                return {
+                    "success": True,
+                    "has_capacity": keluarga_terdaftar < kapasitas_kebun,
+                    "keluarga_terdaftar": keluarga_terdaftar,
+                    "kapasitas_kebun": kapasitas_kebun,
+                    "sisa_kapasitas": kapasitas_kebun - keluarga_terdaftar
+                }
+            return {"error": "Kebun not found"}
+        except Exception as e:
+            return {"error": f"Failed to check capacity: {str(e)}"}

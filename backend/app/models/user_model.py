@@ -2,11 +2,13 @@
 from datetime import datetime
 from bson.objectid import ObjectId
 import bcrypt
+from app.models.kebun_model import KebunModel
 
 class UserModel:
     def __init__(self, database):
         self.db = database
         self.users_collection = self.db.get_collection('users')
+        self.kebun_model = KebunModel(database)
     
     def create_user(self, user_data):
         """Create new user with hashed password"""
@@ -18,6 +20,18 @@ class UserModel:
             if self.users_collection.find_one({"username": user_data['username']}):
                 return {"error": "Username already taken"}
             
+            # Check kebun capacity if kebun_id is provided
+            kebun_id = user_data.get('kebun_id')
+            if kebun_id:
+                capacity_check = self.kebun_model.check_capacity(kebun_id)
+                if "error" in capacity_check:
+                    return {"error": "Kebun not found"}
+                
+                if not capacity_check.get('has_capacity', False):
+                    return {
+                        "error": f"Kebun sudah penuh! Kapasitas: {capacity_check.get('kapasitas_kebun', 4)}/{capacity_check.get('kapasitas_kebun', 4)} keluarga. Silakan pilih kebun lain."
+                    }
+            
             # Hash password
             hashed_password = bcrypt.hashpw(user_data['password'].encode('utf-8'), bcrypt.gensalt())
             
@@ -27,7 +41,7 @@ class UserModel:
                 "username": user_data['username'],
                 "password": hashed_password.decode('utf-8'),
                 "role": user_data.get('role', 'user'),  # 'admin' or 'user'
-                "kebun_id": user_data.get('kebun_id'),  # Reference to kebun
+                "kebun_id": kebun_id,  # Reference to kebun
                 "is_active": True,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
@@ -35,6 +49,12 @@ class UserModel:
             
             result = self.users_collection.insert_one(user_doc)
             user_doc['_id'] = str(result.inserted_id)
+            
+            # Increment keluarga_terdaftar in kebun
+            if kebun_id:
+                increment_result = self.kebun_model.increment_keluarga(kebun_id)
+                if "error" in increment_result:
+                    print(f"Warning: Failed to increment keluarga for kebun {kebun_id}")
             
             # Remove password from returned data
             user_doc.pop('password', None)
@@ -109,12 +129,24 @@ class UserModel:
     def delete_user(self, user_id):
         """Soft delete user (set is_active to False)"""
         try:
+            # Get user data first to get kebun_id
+            user = self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if not user:
+                return {"error": "User not found"}
+            
             result = self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {"is_active": False, "updated_at": datetime.now().isoformat()}}
             )
             
             if result.modified_count > 0:
+                # Decrement keluarga_terdaftar in kebun
+                kebun_id = user.get('kebun_id')
+                if kebun_id:
+                    decrement_result = self.kebun_model.decrement_keluarga(kebun_id)
+                    if "error" in decrement_result:
+                        print(f"Warning: Failed to decrement keluarga for kebun {kebun_id}")
+                
                 return {"success": True, "message": "User deleted successfully"}
             else:
                 return {"error": "User not found"}
