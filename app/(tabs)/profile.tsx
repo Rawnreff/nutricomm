@@ -13,7 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { appConfig } from '../services/config';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
 interface KebunData {
   _id?: string;
@@ -47,15 +48,23 @@ export default function ProfileScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotif, setLoadingNotif] = useState(false);
 
-  // Fetch kebun data and notifikasi from backend
+  // Fetch kebun data saat pertama kali load
   useEffect(() => {
     if (user?.id_kebun) {
       fetchKebunData(user.id_kebun);
     }
-    if (user?.id_user) {
-      fetchNotifikasi(user.id_user);
-    }
   }, [user]);
+
+  // Refresh notifikasi setiap kali screen menjadi fokus
+  // Ini memastikan notifikasi yang sudah dibaca akan ter-update
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id_user) {
+        fetchNotifikasi(user.id_user);
+        console.log('[Profile] Screen focused - refreshing notifikasi');
+      }
+    }, [user?.id_user])
+  );
 
   const fetchKebunData = async (kebunId: string) => {
     try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { appConfig } from '../services/config';
+import { useFocusEffect } from 'expo-router';
 
 interface NotifikasiData {
   _id: string;
@@ -44,6 +45,17 @@ export default function NotifikasiScreen() {
       loadNotifikasi();
     }
   }, [user]);
+
+  // Refresh data setiap kali screen menjadi fokus
+  // Ini memastikan data notifikasi selalu ter-update
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        loadNotifikasi();
+        console.log('[Notifikasi] Screen focused - refreshing data');
+      }
+    }, [user])
+  );
 
   const loadNotifikasi = async () => {
     try {
