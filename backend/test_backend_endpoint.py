@@ -5,11 +5,13 @@ Test apakah backend siap menerima data dari ESP32
 
 import requests
 from datetime import datetime
+from config import get_backend_url, get_global_ip, get_flask_port
 
-# GANTI dengan IP laptop Anda
-BACKEND_IP = "10.218.18.170"
-BACKEND_PORT = 5000
-BASE_URL = f"http://{BACKEND_IP}:{BACKEND_PORT}"
+# Gunakan konfigurasi dari config.py
+# Jika IP laptop berubah, ubah di config.py saja
+BASE_URL = get_backend_url()
+BACKEND_IP = get_global_ip()
+BACKEND_PORT = get_flask_port()
 
 def test_health():
     """Test /api/sensors/health"""
@@ -208,8 +210,9 @@ def main():
         print("\nTroubleshooting:")
         print("1. Pastikan Flask backend sudah running")
         print("2. Pastikan MongoDB sudah running")
-        print("3. Cek IP address: http://10.218.18.170:5000")
+        print(f"3. Cek IP address: {BASE_URL}")
         print("4. Cek firewall Windows")
+        print(f"5. Jika IP berubah, edit backend/config.py")
     
     print("="*60 + "\n")
 

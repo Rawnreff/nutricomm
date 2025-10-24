@@ -7,9 +7,12 @@ import requests
 import time
 import random
 from datetime import datetime
+from config import get_backend_url
 
-# Backend URL (GANTI dengan IP laptop Anda)
-BACKEND_URL = "http://10.218.18.170:5000/api/sensors/save"
+# Gunakan konfigurasi dari config.py
+# Jika IP laptop berubah, ubah di config.py saja
+BACKEND_BASE_URL = get_backend_url()
+BACKEND_URL = f"{BACKEND_BASE_URL}/api/sensors/save"
 KEBUN_ID = "KBG001"
 INTERVAL = 1  # detik
 
@@ -96,7 +99,8 @@ def main():
         print("Pastikan:")
         print("1. Flask backend sudah running")
         print("2. MongoDB sudah running")
-        print("3. URL benar: http://10.218.18.170:5000")
+        print(f"3. URL benar: {BACKEND_BASE_URL}")
+        print("4. Jika IP berubah, edit backend/config.py")
         print()
         return
     
