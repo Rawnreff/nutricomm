@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { appConfig } from '../services/config';
+import { router } from 'expo-router';
 
 interface KebunData {
   _id?: string;
@@ -26,15 +27,32 @@ interface KebunData {
   updated_at?: string;
 }
 
+interface NotifikasiData {
+  _id: string;
+  id_notifikasi: string;
+  judul: string;
+  pesan: string;
+  tingkat: string;
+  icon: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [kebunData, setKebunData] = useState<KebunData | null>(null);
   const [loadingKebun, setLoadingKebun] = useState(false);
+  const [notifikasi, setNotifikasi] = useState<NotifikasiData[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotif, setLoadingNotif] = useState(false);
 
-  // Fetch kebun data from backend
+  // Fetch kebun data and notifikasi from backend
   useEffect(() => {
     if (user?.id_kebun) {
       fetchKebunData(user.id_kebun);
+    }
+    if (user?.id_user) {
+      fetchNotifikasi(user.id_user);
     }
   }, [user]);
 
@@ -55,6 +73,27 @@ export default function ProfileScreen() {
       console.error('[Profile] Error loading kebun:', error);
     } finally {
       setLoadingKebun(false);
+    }
+  };
+
+  const fetchNotifikasi = async (userId: string) => {
+    try {
+      setLoadingNotif(true);
+      const backendUrl = appConfig.getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/notifikasi/user/${userId}?limit=5`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setNotifikasi(result.notifikasi);
+        setUnreadCount(result.unread_count);
+        console.log('[Profile] Notifikasi loaded:', result.notifikasi.length);
+      } else {
+        console.error('[Profile] Failed to load notifikasi:', result);
+      }
+    } catch (error) {
+      console.error('[Profile] Error loading notifikasi:', error);
+    } finally {
+      setLoadingNotif(false);
     }
   };
 
@@ -123,9 +162,61 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>{user.email}</Text>
         </View>
 
+        {/* Notifikasi Terbaru */}
+        <View style={styles.section}>
+          <View style={styles.sectionTitleRow}>
+            <View>
+              <Text style={styles.sectionTitle}>Notifikasi Terbaru</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/notifikasi')}>
+              <Text style={styles.seeAllText}>Lihat Semua</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingNotif ? (
+            <View style={styles.loadingSection}>
+              <ActivityIndicator size="small" color="#2E7D32" />
+            </View>
+          ) : notifikasi.length === 0 ? (
+            <View style={styles.emptyNotifSection}>
+              <Ionicons name="notifications-off-outline" size={32} color="#BDBDBD" />
+              <Text style={styles.emptyNotifText}>Belum ada notifikasi</Text>
+            </View>
+          ) : (
+            <View style={styles.notifContainer}>
+              {notifikasi.map((notif) => (
+                <TouchableOpacity
+                  key={notif.id_notifikasi}
+                  style={[styles.notifItem, !notif.is_read && styles.notifItemUnread]}
+                  onPress={() => router.push('/(tabs)/notifikasi')}
+                >
+                  <View style={styles.notifIconContainer}>
+                    <Ionicons 
+                      name={notif.icon as any || 'notifications'} 
+                      size={20} 
+                      color={notif.tingkat === 'critical' ? '#F44336' : notif.tingkat === 'warning' ? '#FF9800' : '#2196F3'} 
+                    />
+                  </View>
+                  <View style={styles.notifTextContainer}>
+                    <Text style={styles.notifJudul} numberOfLines={1}>{notif.judul}</Text>
+                    <Text style={styles.notifPesan} numberOfLines={1}>{notif.pesan}</Text>
+                  </View>
+                  {!notif.is_read && <View style={styles.notifDot} />}
+                </TouchableOpacity>
+              ))}
+              {unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>{unreadCount} belum dibaca</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
         {/* Info Kebun */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informasi Kebun</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>Informasi Kebun</Text>
+          </View>
           {loadingKebun ? (
             <View style={styles.loadingSection}>
               <ActivityIndicator size="small" color="#2E7D32" />
@@ -172,7 +263,9 @@ export default function ProfileScreen() {
 
         {/* Info User */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informasi Akun</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>Informasi Akun</Text>
+          </View>
           <View style={styles.sectionContent}>
             <ProfileItem 
               icon="person" 
@@ -184,16 +277,10 @@ export default function ProfileScreen() {
 
         {/* Menu Lainnya */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pengaturan</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>Pengaturan</Text>
+          </View>
           <View style={styles.sectionContent}>
-            <TouchableOpacity style={styles.menuItem}>
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="notifications" size={20} color="#666" />
-                <Text style={styles.menuText}>Notifikasi</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
-
             <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="lock-closed" size={20} color="#666" />
@@ -286,7 +373,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 12,
-    paddingHorizontal: 20,
   },
   sectionContent: {
     backgroundColor: '#FFFFFF',
@@ -378,9 +464,91 @@ const styles = StyleSheet.create({
   versionContainer: {
     alignItems: 'center',
     padding: 20,
+    marginBottom: 20,
   },
   versionText: {
     color: '#999',
     fontSize: 14,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  sectionTitleContainer: {
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    padding: 5,
+  },
+  notifContainer: {
+    backgroundColor: '#FFFFFF',
+  },
+  notifItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  notifItemUnread: {
+    backgroundColor: '#F1F8F4',
+  },
+  notifIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  notifTextContainer: {
+    flex: 1,
+  },
+  notifJudul: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  notifPesan: {
+    fontSize: 12,
+    color: '#666',
+  },
+  notifDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2E7D32',
+    marginLeft: 8,
+  },
+  emptyNotifSection: {
+    backgroundColor: '#FFFFFF',
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyNotifText: {
+    fontSize: 14,
+    color: '#BDBDBD',
+    marginTop: 8,
+  },
+  unreadBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  unreadBadgeText: {
+    fontSize: 12,
+    color: '#E65100',
+    fontWeight: '600',
   },
 });

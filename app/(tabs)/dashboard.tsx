@@ -11,8 +11,11 @@ import {
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import { SensorData } from '../types';
 import { connectSocket, apiService } from '../services/socket';
+import { useAuth } from '../contexts/AuthContext';
+import { appConfig } from '../services/config';
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
@@ -20,11 +23,10 @@ export default function Dashboard() {
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [connectionType, setConnectionType] = useState<'websocket' | 'polling' | 'disconnected'>('disconnected');
   const disconnectRef = useRef<(() => void) | null>(null);
+  const savedNotificationsRef = useRef<Set<string>>(new Set());
 
   // Fungsi untuk memproses data sensor baru
   const handleNewSensorData = (data: any) => {
-    console.log('[Dashboard] New data received:', data);
-    
     const sensorData: SensorData = {
       id_kebun: data.id_kebun || 'KBG001',
       suhu: parseFloat(data.suhu) || 0,
@@ -40,45 +42,201 @@ export default function Dashboard() {
     setLastUpdate(new Date().toLocaleTimeString('id-ID'));
   };
 
+  const saveNotificationToDatabase = async (
+    kategori: string,
+    judul: string,
+    pesan: string,
+    tingkat: string,
+    icon: string,
+    sensorData: SensorData
+  ) => {
+    try {
+      // Create unique key untuk notifikasi ini agar tidak duplikat
+      // Group by hour (3600000ms = 1 jam) instead of minute
+      const notifKey = `${kategori}_${tingkat}_${Math.floor(Date.now() / 3600000)}`; // Group by hour
+      
+      // Cek apakah notifikasi ini sudah disimpan dalam 1 jam terakhir
+      if (savedNotificationsRef.current.has(notifKey)) {
+        console.log('[Dashboard] ⏭️ Notifikasi sudah tersimpan dalam 1 jam terakhir, skip:', judul);
+        return; // Skip jika sudah disimpan
+      }
+
+      // Jika user belum login, gunakan default
+      const userId = user?.id_user || 'GUEST';
+      const kebunId = user?.id_kebun || sensorData.id_kebun;
+      
+      console.log('[Dashboard] Menyimpan notifikasi:', {
+        judul,
+        kategori,
+        tingkat,
+        userId,
+        kebunId
+      });
+      
+      const backendUrl = appConfig.getBackendUrl();
+      
+      const response = await fetch(`${backendUrl}/api/notifikasi/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          kebun_id: kebunId,
+          jenis: 'sensor',
+          kategori: kategori,
+          judul: judul,
+          pesan: pesan,
+          tingkat: tingkat,
+          icon: icon,
+          sensor_data: {
+            suhu: sensorData.suhu,
+            kelembapan_udara: sensorData.kelembapan_udara,
+            kelembapan_tanah: sensorData.kelembapan_tanah,
+            cahaya: sensorData.cahaya,
+            co2: sensorData.co2,
+            timestamp: sensorData.timestamp
+          }
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Tandai notifikasi ini sudah disimpan
+        savedNotificationsRef.current.add(notifKey);
+        
+        if (data.skipped) {
+          console.log('⏭️ [Dashboard] Notifikasi sudah ada dalam 1 jam terakhir, skip:', judul);
+        } else {
+          console.log('✅ [Dashboard] Notifikasi berhasil tersimpan:', judul);
+        }
+      } else {
+        console.error('❌ [Dashboard] Gagal menyimpan notifikasi:', data.error);
+      }
+    } catch (error) {
+      console.error('❌ [Dashboard] Error saving notification:', error);
+    }
+  };
+
   const checkNotifications = (data: SensorData) => {
     const newNotifications: string[] = [];
     
+    console.log('[Dashboard] Checking notifications for sensor data:', {
+      kelembapan_tanah: data.kelembapan_tanah,
+      co2: data.co2,
+      suhu: data.suhu,
+      cahaya: data.cahaya
+    });
+    
+    // Kelembapan Tanah
     if (data.kelembapan_tanah < 30) {
-      newNotifications.push('💧 Kelembapan tanah rendah, waktunya menyiram');
+      const pesan = '💧 Kelembapan tanah rendah, waktunya menyiram';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Kelembapan tanah rendah');
+      saveNotificationToDatabase(
+        'kelembapan_tanah',
+        'Kelembapan Tanah Rendah',
+        pesan,
+        'warning',
+        'water',
+        data
+      );
     } else if (data.kelembapan_tanah > 80) {
-      newNotifications.push('💦 Kelembapan tanah terlalu tinggi');
+      const pesan = '💦 Kelembapan tanah terlalu tinggi';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Kelembapan tanah tinggi');
+      saveNotificationToDatabase(
+        'kelembapan_tanah',
+        'Kelembapan Tanah Tinggi',
+        pesan,
+        'warning',
+        'water',
+        data
+      );
     }
     
+    // CO2
     if (data.co2 > 1000) {
-      newNotifications.push('🌬️ CO₂ terlalu tinggi, periksa sirkulasi udara');
+      const pesan = '🌬️ CO₂ terlalu tinggi, periksa sirkulasi udara';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: CO₂ tinggi');
+      saveNotificationToDatabase(
+        'co2',
+        'CO₂ Terlalu Tinggi',
+        pesan,
+        'critical',
+        'cloud',
+        data
+      );
     }
     
+    // Suhu
     if (data.suhu > 35) {
-      newNotifications.push('🌡️ Suhu terlalu tinggi, perhatikan tanaman');
+      const pesan = '🌡️ Suhu terlalu tinggi, perhatikan tanaman';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Suhu tinggi');
+      saveNotificationToDatabase(
+        'suhu',
+        'Suhu Terlalu Tinggi',
+        pesan,
+        'critical',
+        'thermometer',
+        data
+      );
     } else if (data.suhu < 15) {
-      newNotifications.push('❄️ Suhu terlalu rendah untuk tanaman');
+      const pesan = '❄️ Suhu terlalu rendah untuk tanaman';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Suhu rendah');
+      saveNotificationToDatabase(
+        'suhu',
+        'Suhu Terlalu Rendah',
+        pesan,
+        'warning',
+        'snow',
+        data
+      );
     }
     
+    // Cahaya
     if (data.cahaya < 1000) {
-      newNotifications.push('💡 Cahaya kurang, pertimbangkan pencahayaan tambahan');
+      const pesan = '💡 Cahaya kurang, pertimbangkan pencahayaan tambahan';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Cahaya kurang');
+      saveNotificationToDatabase(
+        'cahaya',
+        'Cahaya Kurang',
+        pesan,
+        'info',
+        'bulb',
+        data
+      );
     } else if (data.cahaya > 12000) {
-      newNotifications.push('☀️ Cahaya terlalu terang, mungkin perlu naungan');
+      const pesan = '☀️ Cahaya terlalu terang, mungkin perlu naungan';
+      newNotifications.push(pesan);
+      console.log('[Dashboard] 🔔 Trigger notifikasi: Cahaya terang');
+      saveNotificationToDatabase(
+        'cahaya',
+        'Cahaya Terlalu Terang',
+        pesan,
+        'info',
+        'sunny',
+        data
+      );
     }
 
+    console.log('[Dashboard] Total notifikasi aktif:', newNotifications.length);
     setNotifications(newNotifications);
   };
 
   // Load data terbaru dari API (MongoDB)
   const loadLatestDataFromAPI = async () => {
     try {
-      console.log('[API] Loading latest data from MongoDB...');
       const data = await apiService.getLatestData();
       handleNewSensorData(data);
-      console.log('[API] Data loaded successfully from MongoDB');
+      console.log('[Dashboard] Initial data loaded successfully');
     } catch (error) {
-      console.error('[API] Failed to load data from MongoDB:', error);
-      // TIDAK ADA FALLBACK KE MOCK DATA
-      // Biarkan state sensorData tetap null atau data sebelumnya
+      console.error('[Dashboard] Failed to load initial data:', error);
       Alert.alert(
         'Koneksi Gagal',
         'Tidak dapat terhubung ke server. Pastikan backend sedang berjalan.',
@@ -88,7 +246,7 @@ export default function Dashboard() {
   };
 
   const initializeConnection = () => {
-    console.log('[Dashboard] Initializing real connection...');
+    console.log('[Dashboard] Initializing connection...');
     
     // Clean up previous connection
     if (disconnectRef.current) {
@@ -98,13 +256,12 @@ export default function Dashboard() {
     // Load data awal dari API
     loadLatestDataFromAPI();
 
-    // Try WebSocket untuk real-time updates
+    // Try WebSocket untuk real-time updates (akan fallback ke polling)
     setConnectionType('disconnected');
     setIsConnected(false);
     
     const cleanupWebSocket = connectSocket((data) => {
-      console.log('[Dashboard] Real-time data received');
-      setConnectionType('websocket');
+      setConnectionType('polling'); // Set ke polling karena WebSocket tidak aktif
       setIsConnected(true);
       handleNewSensorData(data);
     });
@@ -130,10 +287,17 @@ export default function Dashboard() {
   useEffect(() => {
     initializeConnection();
 
+    // Cleanup savedNotifications setiap 1 jam untuk prevent memory leak
+    const cleanupInterval = setInterval(() => {
+      console.log('[Dashboard] 🧹 Cleanup old notification keys');
+      savedNotificationsRef.current.clear();
+    }, 3600000); // 1 jam
+
     return () => {
       if (disconnectRef.current) {
         disconnectRef.current();
       }
+      clearInterval(cleanupInterval);
     };
   }, []);
 
@@ -302,30 +466,6 @@ export default function Dashboard() {
               />
             </View>
 
-            {/* Data Source Info */}
-            <View style={styles.infoSection}>
-              <Text style={styles.sectionTitle}>Sistem Data Real</Text>
-              <View style={styles.infoCard}>
-                <View style={styles.infoItem}>
-                  <Ionicons name="server" size={16} color="#666" />
-                  <Text style={styles.infoText}>
-                    Data langsung dari sensor dan MongoDB
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Ionicons name="flash" size={16} color="#666" />
-                  <Text style={styles.infoText}>
-                    Update real-time via WebSocket/polling
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Ionicons name="hardware-chip" size={16} color="#666" />
-                  <Text style={styles.infoText}>
-                    Tidak ada data simulasi/mock
-                  </Text>
-                </View>
-              </View>
-            </View>
           </>
         )}
       </ScrollView>
@@ -444,6 +584,7 @@ const styles = StyleSheet.create({
   sensorGrid: {
     padding: 16,
     gap: 12,
+    marginBottom: 20,
   },
   sensorCard: {
     backgroundColor: '#FFFFFF',

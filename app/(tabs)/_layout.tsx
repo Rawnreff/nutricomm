@@ -154,6 +154,15 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="notifikasi"
+          options={{
+            title: 'Notifikasi',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="notifications" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: 'Profil',

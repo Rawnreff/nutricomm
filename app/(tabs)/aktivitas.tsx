@@ -8,7 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
-  FlatList,
+  SectionList,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -26,6 +26,11 @@ interface AktivitasData {
   tanggal: string;
   waktu: string;
   foto?: string[];
+}
+
+interface AktivitasSection {
+  title: string;
+  data: AktivitasData[];
 }
 
 const JENIS_AKTIVITAS_OPTIONS = [
@@ -95,13 +100,29 @@ export default function AktivitasScreen() {
   const loadAktivitas = async () => {
     try {
       const backendUrl = appConfig.getBackendUrl();
+      
+      // Calculate date range for last 10 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 9); // 10 days including today
+      
       const response = await fetch(
-        `${backendUrl}/api/aktivitas/kebun/${user?.id_kebun}/today`
+        `${backendUrl}/api/aktivitas/kebun/${user?.id_kebun}`
       );
       const data = await response.json();
       
       if (data.success) {
-        setAktivitasList(data.aktivitas);
+        // Filter for last 10 days and sort by date (newest first)
+        const filteredAktivitas = data.aktivitas
+          .filter((item: AktivitasData) => {
+            const itemDate = new Date(item.tanggal);
+            return itemDate >= startDate && itemDate <= endDate;
+          })
+          .sort((a: AktivitasData, b: AktivitasData) => {
+            return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
+          });
+        
+        setAktivitasList(filteredAktivitas);
       }
     } catch (error) {
       console.error('[Aktivitas] Error loading aktivitas:', error);
@@ -222,6 +243,56 @@ export default function AktivitasScreen() {
     });
   };
 
+  const formatTanggalSection = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Reset time to compare dates only
+    today.setHours(0, 0, 0, 0);
+    yesterday.setHours(0, 0, 0, 0);
+    const compareDate = new Date(date);
+    compareDate.setHours(0, 0, 0, 0);
+    
+    if (compareDate.getTime() === today.getTime()) {
+      return 'Hari Ini';
+    } else if (compareDate.getTime() === yesterday.getTime()) {
+      return 'Kemarin';
+    } else {
+      return date.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    }
+  };
+
+  const groupByDate = (activities: AktivitasData[]): AktivitasSection[] => {
+    const grouped: { [key: string]: AktivitasData[] } = {};
+    
+    activities.forEach((activity) => {
+      const dateKey = activity.tanggal.split('T')[0]; // Get YYYY-MM-DD
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(activity);
+    });
+    
+    // Convert to section format and sort by date (newest first)
+    return Object.entries(grouped)
+      .map(([dateKey, data]) => ({
+        title: formatTanggalSection(dateKey),
+        data: data.sort((a, b) => new Date(b.waktu).getTime() - new Date(a.waktu).getTime())
+      }))
+      .sort((a, b) => {
+        const dateA = new Date(a.data[0].tanggal);
+        const dateB = new Date(b.data[0].tanggal);
+        return dateB.getTime() - dateA.getTime();
+      });
+  };
+
   const getIconForKegiatan = (jenis: string) => {
     // Jika multiple aktivitas, ambil yang pertama
     const firstActivity = jenis.split(',')[0].trim();
@@ -272,8 +343,8 @@ export default function AktivitasScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Aktivitas Hari Ini</Text>
-        <Text style={styles.headerSubtitle}>{kebun?.nama_kebun || 'Kebun Gizi'}</Text>
+        <Text style={styles.headerTitle}>History Aktivitas</Text>
+        <Text style={styles.headerSubtitle}>{kebun?.nama_kebun || 'Kebun Gizi'} • 10 Hari Terakhir</Text>
       </View>
 
       {/* Floating Action Button */}
@@ -288,9 +359,14 @@ export default function AktivitasScreen() {
       </TouchableOpacity>
 
       {/* Daftar Aktivitas */}
-      <FlatList
-        data={aktivitasList}
+      <SectionList
+        sections={groupByDate(aktivitasList)}
         renderItem={renderAktivitasItem}
+        renderSectionHeader={({ section: { title } }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>{title}</Text>
+          </View>
+        )}
         keyExtractor={(item, index) => item._id || index.toString()}
         contentContainerStyle={styles.listContainer}
         refreshControl={
@@ -299,7 +375,7 @@ export default function AktivitasScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="leaf-outline" size={64} color="#BDBDBD" />
-            <Text style={styles.emptyStateTitle}>Belum ada aktivitas hari ini</Text>
+            <Text style={styles.emptyStateTitle}>Belum ada aktivitas</Text>
             <Text style={styles.emptyStateText}>
               {canAddAktivitas 
                 ? 'Tekan tombol + untuk menambah aktivitas'
@@ -307,6 +383,7 @@ export default function AktivitasScreen() {
             </Text>
           </View>
         }
+        stickySectionHeadersEnabled={true}
       />
 
       {/* Modal Tambah Aktivitas */}
@@ -449,6 +526,23 @@ const styles = StyleSheet.create({
   listContainer: {
     padding: 16,
     paddingBottom: 80,
+  },
+  sectionHeader: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    marginHorizontal: -16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2E7D32',
+  },
+  sectionHeaderText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2E7D32',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   aktivitasItem: {
     flexDirection: 'row',

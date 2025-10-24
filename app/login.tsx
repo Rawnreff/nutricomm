@@ -75,7 +75,7 @@ export default function LoginScreen() {
 
         {/* Form Login */}
         <View style={styles.formContainer}>
-          <Text style={styles.formTitle}>Masuk ke Akun Anda</Text>
+          <Text style={styles.formTitle}>Login ke Akun Anda</Text>
 
           {/* Email Input */}
           <View style={styles.inputGroup}>
@@ -163,8 +163,8 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 30,
+    paddingTop: 80,
+    paddingBottom: 50,
     paddingHorizontal: 20,
   },
   logoContainer: {
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 24,
+    marginBottom: 14,
     textAlign: 'center',
   },
   inputGroup: {

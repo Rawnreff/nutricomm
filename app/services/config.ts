@@ -11,9 +11,9 @@ class AppConfig {
   constructor() {
     // Default configuration - akan dioverride oleh environment
     this.config = {
-      backendUrl: 'http://localhost:5000',
-      socketUrl: 'http://localhost:5000',
-      wsUrl: 'ws://localhost:5000'
+      backendUrl: 'http://192.168.137.1:5000',
+      socketUrl: 'http://192.168.137.1:5000',
+      wsUrl: 'ws://192.168.137.1:5000'
     };
     
     this.loadConfig();
