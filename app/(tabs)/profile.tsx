@@ -8,6 +8,7 @@ import {
   Alert,
   SafeAreaView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -119,6 +120,46 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleHubungiTim = async () => {
+    try {
+      const phoneNumber = '6281336437117'; // Format internasional tanpa +
+      const message = `Halo Tim Nutricomm! 👋
+
+Saya membutuhkan bantuan terkait aplikasi Nutricomm.
+
+*Nama:* ${user?.nama || 'User'}
+*Email:* ${user?.email || '-'}
+*Kebun:* ${kebunData?.nama_kebun || '-'}
+
+Mohon bantuannya: <<pesan saya>>`;
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodedMessage}`;
+      const whatsappWebUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+
+      // Coba buka WhatsApp app dulu
+      const canOpen = await Linking.canOpenURL(whatsappUrl);
+      
+      if (canOpen) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        // Jika WhatsApp app tidak tersedia, buka WhatsApp Web
+        await Linking.openURL(whatsappWebUrl);
+      }
+    } catch (error) {
+      console.error('[Profile] Error opening WhatsApp:', error);
+      Alert.alert(
+        'Error',
+        'Tidak dapat membuka WhatsApp. Pastikan WhatsApp sudah terinstall.',
+        [
+          {
+            text: 'OK'
+          }
+        ]
+      );
+    }
   };
 
   const ProfileItem = ({ 
@@ -281,7 +322,10 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Pengaturan</Text>
           </View>
           <View style={styles.sectionContent}>
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => router.push('/change-password')}
+            >
               <View style={styles.menuItemLeft}>
                 <Ionicons name="lock-closed" size={20} color="#666" />
                 <Text style={styles.menuText}>Ubah Password</Text>
@@ -289,15 +333,21 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={handleHubungiTim}
+            >
               <View style={styles.menuItemLeft}>
-                <Ionicons name="help-circle" size={20} color="#666" />
+                <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
                 <Text style={styles.menuText}>Bantuan & Panduan</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={() => router.push('/about')}
+            >
               <View style={styles.menuItemLeft}>
                 <Ionicons name="information-circle" size={20} color="#666" />
                 <Text style={styles.menuText}>Tentang Aplikasi</Text>
