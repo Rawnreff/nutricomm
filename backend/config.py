@@ -9,7 +9,7 @@ load_dotenv()
 # ==================================================================================
 # Ketika IP laptop berubah, cukup ubah nilai DEFAULT_LAPTOP_IP di bawah ini:
 
-DEFAULT_LAPTOP_IP = '192.168.1.5'  # ← UBAH IP DI SINI SAJA
+DEFAULT_LAPTOP_IP = '10.11.0.137'  # ← UBAH IP DI SINI SAJA
 DEFAULT_PORT = 5000
 
 # CATATAN: IP akan diambil LANGSUNG dari variabel di atas.
