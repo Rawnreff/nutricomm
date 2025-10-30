@@ -5,7 +5,7 @@
 // ==================================================================================
 // Ketika IP laptop berubah, cukup ubah nilai BACKEND_IP di bawah ini:
 
-const BACKEND_IP = '192.168.1.5';  // ← UBAH IP DI SINI SAJA
+const BACKEND_IP = '10.11.0.137';  // ← UBAH IP DI SINI SAJA
 const BACKEND_PORT = '5000';
 
 // Daftar IP yang sering digunakan (untuk quick select di UI)

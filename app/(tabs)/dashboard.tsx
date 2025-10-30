@@ -10,7 +10,7 @@ import {
 } from 'react-native'; 
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import { SensorData } from '../types';
-import { connectSocket, apiService } from '../services/socket';
+import { apiService } from '../services/socket';
 import { useAuth } from '../contexts/AuthContext';
 import { appConfig } from '../services/config';
 
@@ -21,8 +21,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>('');
-  const [connectionType, setConnectionType] = useState<'websocket' | 'polling' | 'disconnected'>('disconnected');
-  const disconnectRef = useRef<(() => void) | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const savedNotificationsRef = useRef<Set<string>>(new Set());
 
   // Fungsi untuk memproses data sensor baru
@@ -246,27 +245,21 @@ export default function Dashboard() {
   };
 
   const initializeConnection = () => {
-    console.log('[Dashboard] Initializing connection...');
+    console.log('[Dashboard] Initializing REST API connection...');
     
-    // Clean up previous connection
-    if (disconnectRef.current) {
-      disconnectRef.current();
+    // Clean up previous polling interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
     }
 
     // Load data awal dari API
     loadLatestDataFromAPI();
+    setIsConnected(true);
 
-    // Try WebSocket untuk real-time updates (akan fallback ke polling)
-    setConnectionType('disconnected');
-    setIsConnected(false);
-    
-    const cleanupWebSocket = connectSocket((data) => {
-      setConnectionType('polling'); // Set ke polling karena WebSocket tidak aktif
-      setIsConnected(true);
-      handleNewSensorData(data);
-    });
-
-    disconnectRef.current = cleanupWebSocket;
+    // Setup polling setiap 2 detik untuk mendapatkan data terbaru
+    pollingIntervalRef.current = setInterval(() => {
+      loadLatestDataFromAPI();
+    }, 2000); // Poll setiap 2 detik
   };
 
   const onRefresh = async () => {
@@ -276,8 +269,8 @@ export default function Dashboard() {
     await loadLatestDataFromAPI();
     
     // Restart connection
-    if (disconnectRef.current) {
-      disconnectRef.current();
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
     }
     initializeConnection();
     
@@ -294,8 +287,8 @@ export default function Dashboard() {
     }, 3600000); // 1 jam
 
     return () => {
-      if (disconnectRef.current) {
-        disconnectRef.current();
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
       }
       clearInterval(cleanupInterval);
     };
@@ -329,33 +322,12 @@ export default function Dashboard() {
     </View>
   );
 
-  const getConnectionInfo = () => {
-    switch (connectionType) {
-      case 'websocket':
-        return { 
-          color: '#4CAF50', 
-          text: 'Real-time dari Sensor', 
-          icon: 'wifi',
-          source: 'MongoDB + WebSocket'
-        };
-      case 'polling':
-        return { 
-          color: '#2196F3', 
-          text: 'Polling dari Database', 
-          icon: 'refresh',
-          source: 'MongoDB API'
-        };
-      default:
-        return { 
-          color: '#F44336', 
-          text: 'Menghubungkan...', 
-          icon: 'wifi-outline',
-          source: 'MongoDB'
-        };
-    }
+  const connectionInfo = {
+    color: '#4CAF50', 
+    text: 'Real-time dari Database', 
+    icon: 'wifi' as keyof typeof Ionicons.glyphMap,
+    source: 'Nutricomm'
   };
-
-  const connectionInfo = getConnectionInfo();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -374,8 +346,7 @@ export default function Dashboard() {
                 { backgroundColor: connectionInfo.color }
               ]} />
               <Text style={styles.connectionText}>
-                {connectionType === 'websocket' ? 'Real-time' : 
-                 connectionType === 'polling' ? 'Polling' : 'Connecting'}
+                Real-time
               </Text>
             </View>
             {lastUpdate && (
